@@ -1,5 +1,46 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# Golf Tempo App – Project Structure Guide
+
+This project is a Flutter app scaffolded with `flutter create`. Use this guide to quickly locate entry points, configuration, and where to add new features.
+
+## Entry points and core files
+- App entry: [lib/main.dart](mdc:lib/main.dart)
+- Package config: [pubspec.yaml](mdc:pubspec.yaml)
+- Lints/analysis: [analysis_options.yaml](mdc:analysis_options.yaml)
+- Tests: [test/](mdc:test)
+
+## Platforms
+- iOS plist: [ios/Runner/Info.plist](mdc:ios/Runner/Info.plist)
+- Android manifest: [android/app/src/main/AndroidManifest.xml](mdc:android/app/src/main/AndroidManifest.xml)
+- Web: [web/](mdc:web)
+- macOS: [macos/](mdc:macos)
+- Windows: [windows/](mdc:windows)
+- Linux: [linux/](mdc:linux)
+
+## App organization (planned)
+- UI/screens: `lib/ui/` (e.g., `lib/ui/home_screen.dart`)
+- State management: `lib/state/` (e.g., Riverpod providers)
+- Audio engine: `lib/audio/` (e.g., `lib/audio/audio_engine.dart`)
+- Ads: `lib/ads/` (e.g., Banner widget + init)
+- Theme: `lib/theme/`
+- Utils: `lib/utils/`
+
+## Assets (planned)
+- Audio: `assets/audio/` (3 short WAV beeps: low/mid/high)
+- Icons/images: `assets/images/`
+
+Remember to register assets in [pubspec.yaml](mdc:pubspec.yaml) under `flutter:` → `assets:` when they are added.
+
+## Run and build
+- Analyze: `flutter analyze`
+- Test: `flutter test`
+- Run iOS simulator: `flutter run -d ios`
+- Run Android emulator: `flutter run -d android`
+
+## Notes
+- Keep UI simple and accessible; banner ad sits at the bottom within a SafeArea.
+- Avoid timers for audio timing; rely on the audio engine sequence (see Audio Engine rule).
