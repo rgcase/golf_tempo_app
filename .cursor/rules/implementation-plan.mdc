@@ -1,39 +1,42 @@
 ---
-description: 
-globs: 
+description: Current plan and milestones for the Golf Tempo app
 alwaysApply: false
 ---
 # Implementation Plan and Milestones
 
-This app guides golf swing tempo by playing 3 tones on repeat at configurable tempos. Two core ratios: 3:1 (full swing, e.g., 21:7) and 2:1 (short game/putting).
+This app guides golf swing tempo by playing 3 tones in a repeating cycle at configurable tempos. Two core ratios: 3:1 (full swing, e.g., 21:7) and 2:1 (short game/putting).
 
 ## Milestones
 1. Setup
-   - Add packages: `flutter_riverpod`, `just_audio`, `audio_session`, `wakelock_plus`, `vibration`, `google_mobile_ads`.
+   - Add packages: `just_audio`, `audio_session`, `wakelock_plus`, `vibration`.
    - Establish folder structure under `lib/` (see Project Structure rule).
 2. Audio engine
-   - Add 3 beep assets (`assets/audio/`), wire precise loop using `just_audio` + `SilenceAudioSource`.
-   - Keep screen awake during playback; configure `audio_session`.
+   - Pre-generate cycle WAVs (no embedded gap) using [tools/generate_audio.dart](mdc:tools/generate_audio.dart):
+     - 3:1: 18/6, 21/7, 24/8, 27/9
+     - 2:1: 12/6, 16/8, 20/10
+   - Bundle under [assets/audio/cycles/](mdc:assets/audio/cycles/.gitkeep) and register in [pubspec.yaml](mdc:pubspec.yaml).
+   - At runtime: load the appropriate asset and play once with loop mode off; on completion, wait a configurable gap and restart from the beginning (event-driven relaunch with a timer). This makes the between-cycle gap adjustable at runtime.
 3. UI v1
-   - Home screen: ratio toggle (3:1/2:1), preset chips (e.g., 21:7), tempo slider, Start/Stop, volume, haptics toggle.
-   - Persist preferences locally.
-4. Ads
-   - Banner ad using `google_mobile_ads` with test IDs; SafeArea layout.
-   - Consent (UMP) for EEA.
-5. Website
-   - `docs/` with landing and privacy policy for AdMob.
-6. License & repo polish
+   - Single-screen UI using `setState`: ratio toggle, Start/Stop.
+   - Future: presets UI, volume slider, haptics toggle, keep-awake, and a control for the gap between cycles.
+4. Website
+   - `docs/` with landing and privacy policy (for future ads if added).
+5. License & repo polish
    - Add source-available license permitting personal use only; add README with build instructions.
 
 ## Defaults
 - Presets (3:1): 18/6, 21/7, 24/8, 27/9. Presets (2:1): 12/6, 16/8, 20/10.
-- Beeps: ~50–70ms; pitches ≈ 550/750/1000 Hz.
-- Dark theme, green accent; no pause between cycles initially.
+- Beeps: ~60ms; pitches ≈ 550/750/1000 Hz; envelope for clicky attack (applied at generation time).
+- Dark theme, green accent.
+- Default gap between cycles: 2s (runtime configurable).
 
 ## Next tasks (short list)
-- Add packages to [pubspec.yaml](mdc:pubspec.yaml) and fetch.
-- Create `lib/audio/audio_engine.dart` with a gapless sequence for three tones.
-- Create `assets/audio/` and register assets.
-- Replace scaffold in [lib/main.dart](mdc:lib/main.dart) with Home screen and layout area for a banner ad.
+- Generate assets: `dart run tools/generate_audio.dart`, then `flutter pub get`.
+- Ensure `AudioEngine` plays a single cycle with loop mode off and relaunches after the configured gap.
+- Add a UI control for gap selection (chips or slider).
 
-See also: Project Structure, Audio Engine, and Ads & Privacy rules.
+Notes
+- Ads are currently removed; revisit after core UX is stable.
+- If adding new presets, regenerate audio assets and update the UI mapping accordingly.
+
+See also: Project Structure and Audio Engine rules.

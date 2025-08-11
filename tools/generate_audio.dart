@@ -26,7 +26,7 @@ Future<void> main() async {
 
   const int sampleRate = 44100;
   const Duration beepDuration = Duration(milliseconds: 60);
-  const Duration trailingGap = Duration(seconds: 2);
+  const Duration trailingGap = Duration.zero; // no embedded gap
 
   // Precompute beeps
   final int beepSamples = (beepDuration.inMilliseconds * sampleRate / 1000)
