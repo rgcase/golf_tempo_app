@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:duration/duration.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import '../audio/audio_engine.dart';
 import '../state/tempo_models.dart';
 
@@ -19,6 +20,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final AudioEngine _engine = AudioEngine();
 
   bool _isPlaying = false;
+  double _systemVolume = 1.0;
   TempoRatio _ratio = TempoRatio.threeToOne;
   Duration _gap = const Duration(seconds: 2);
   SoundSet _soundSet = SoundSet.tones;
@@ -50,6 +52,24 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadPrefs();
+    _initVolumeListener();
+  }
+
+  Future<void> _initVolumeListener() async {
+    try {
+      final v = await FlutterVolumeController.getVolume();
+      setState(() => _systemVolume = (v ?? _systemVolume));
+    } catch (_) {}
+    FlutterVolumeController.addListener((v) {
+      if (!mounted) return;
+      setState(() => _systemVolume = (v ?? _systemVolume));
+    });
+  }
+
+  @override
+  void dispose() {
+    FlutterVolumeController.removeListener();
+    super.dispose();
   }
 
   Future<void> _loadPrefs() async {
@@ -276,6 +296,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         _isPlaying ? _stop() : _start();
                       },
                     ),
+                    if (_systemVolume == 0.0) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'System volume is muted. Increase volume to hear tones.',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ],
                   ],
                 ),
               ),
