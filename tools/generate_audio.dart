@@ -1,5 +1,5 @@
 // Run with: dart run tools/generate_audio.dart
-// Generates WAV cycle files into assets/audio/cycles/ (per sound set) and SFX into assets/audio/sfx/
+// Generates cycle WAV files into assets/audio/cycles/<set>/ for all speeds
 
 import 'dart:io';
 import 'dart:math' as math;
@@ -8,11 +8,8 @@ import 'dart:typed_data';
 Future<void> main() async {
   final cyclesRoot = Directory('assets/audio/cycles');
   if (!cyclesRoot.existsSync()) cyclesRoot.createSync(recursive: true);
-  final sfxDir = Directory('assets/audio/sfx');
-  if (!sfxDir.existsSync()) sfxDir.createSync(recursive: true);
 
   await _generateAllCycleSets(cyclesRoot);
-  await _generateSfx(sfxDir);
 
   stdout.writeln('Done. Run: flutter pub get');
 }
@@ -158,77 +155,6 @@ Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
     await writeSetDir(set, '3to1', threeToOne);
     await writeSetDir(set, '2to1', twoToOne);
   }
-}
-
-Future<void> _generateSfx(Directory outDir) async {
-  const int sampleRate = 44100;
-
-  // Woodblock tick
-  final woodblock = _synthesizeResonantClick(
-    sampleRate: sampleRate,
-    durationMs: 60,
-    freqsHz: [1800, 3200],
-    amps: [0.9, 0.6],
-    decayMs: 50,
-  );
-  File(
-    '${outDir.path}/woodblock_tick.wav',
-  ).writeAsBytesSync(woodblock, flush: true);
-  stdout.writeln('Wrote ${outDir.path}/woodblock_tick.wav');
-
-  // Piano tones
-  final pianoLow = _synthesizeAdditiveTone(
-    fundamentalHz: 440,
-    partialAmps: const [1.0, 0.4, 0.2],
-    sampleRate: sampleRate,
-    durationMs: 70,
-    attackMs: 4,
-    decayMs: 60,
-  );
-  final pianoMid = _synthesizeAdditiveTone(
-    fundamentalHz: 660,
-    partialAmps: const [1.0, 0.35, 0.15],
-    sampleRate: sampleRate,
-    durationMs: 70,
-    attackMs: 4,
-    decayMs: 60,
-  );
-  final pianoHigh = _synthesizeAdditiveTone(
-    fundamentalHz: 880,
-    partialAmps: const [1.0, 0.3, 0.12],
-    sampleRate: sampleRate,
-    durationMs: 70,
-    attackMs: 4,
-    decayMs: 60,
-  );
-  File('${outDir.path}/piano_low.wav').writeAsBytesSync(pianoLow, flush: true);
-  File('${outDir.path}/piano_mid.wav').writeAsBytesSync(pianoMid, flush: true);
-  File(
-    '${outDir.path}/piano_high.wav',
-  ).writeAsBytesSync(pianoHigh, flush: true);
-  stdout.writeln('Wrote piano tones');
-
-  // Golf ticks and woosh
-  final golfTick = _synthesizeResonantClick(
-    sampleRate: sampleRate,
-    durationMs: 60,
-    freqsHz: [1200, 2400],
-    amps: [0.8, 0.5],
-    decayMs: 45,
-  );
-  final golfWoosh = _synthesizeNoiseWoosh(
-    sampleRate: sampleRate,
-    durationMs: 100,
-    startAmp: 0.2,
-    peakAmp: 0.6,
-    endAmp: 0.0,
-  );
-  File('${outDir.path}/golf_tick1.wav').writeAsBytesSync(golfTick, flush: true);
-  File('${outDir.path}/golf_tick2.wav').writeAsBytesSync(golfTick, flush: true);
-  File(
-    '${outDir.path}/golf_woosh.wav',
-  ).writeAsBytesSync(golfWoosh, flush: true);
-  stdout.writeln('Wrote golf ticks and woosh');
 }
 
 class _Pair {
