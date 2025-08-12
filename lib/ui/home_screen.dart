@@ -6,6 +6,8 @@ import '../state/tempo_models.dart';
 
 typedef SwingSpeed = ({int backswing, int downswing});
 
+enum SoundSet { tones, woodblock, piano, golf }
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isPlaying = false;
   TempoRatio _ratio = TempoRatio.threeToOne;
   Duration _gap = const Duration(seconds: 2);
+  SoundSet _soundSet = SoundSet.tones;
 
   // Frame presets
   final List<SwingSpeed> _threeToOnePresets = const <SwingSpeed>[
@@ -61,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final t21b = prefs.getInt('t21_b') ?? 16;
     final t21d = prefs.getInt('t21_d') ?? 8;
     final gapMs = prefs.getInt('gap_ms') ?? 2000;
+    final setKey = prefs.getString('sound_set') ?? 'tones';
 
     setState(() {
       _ratio = r;
@@ -70,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ? _selectedThreeToOne
           : _selectedTwoToOne;
       _gap = Duration(milliseconds: gapMs);
+      _soundSet = _fromSetKey(setKey);
     });
   }
 
@@ -84,7 +89,21 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setInt('t21_b', _selectedTwoToOne.backswing);
     await prefs.setInt('t21_d', _selectedTwoToOne.downswing);
     await prefs.setInt('gap_ms', _gap.inMilliseconds);
+    await prefs.setString('sound_set', _toSetKey(_soundSet));
   }
+
+  String _toSetKey(SoundSet s) => switch (s) {
+    SoundSet.tones => 'tones',
+    SoundSet.woodblock => 'woodblock',
+    SoundSet.piano => 'piano',
+    SoundSet.golf => 'golf',
+  };
+  SoundSet _fromSetKey(String k) => switch (k) {
+    'woodblock' => SoundSet.woodblock,
+    'piano' => SoundSet.piano,
+    'golf' => SoundSet.golf,
+    _ => SoundSet.tones,
+  };
 
   Future<void> _start() async {
     if (_isPlaying) return;
@@ -93,11 +112,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     try {
       _engine.setGap(_gap);
+      await _engine.setSoundSet(_toSetKey(_soundSet));
       final cfg = _configForSelection();
       await _engine.setTempo(
         backswingUnits: cfg.backswingUnits,
         downswingUnits: cfg.downswingUnits,
-        totalCycle: cfg.totalCycle,
       );
       await _engine.start();
     } catch (_) {
@@ -128,15 +147,10 @@ class _HomeScreenState extends State<HomeScreen> {
   TempoConfig _configForSelection() {
     final backswing = _selectedPreset.backswing;
     final downswing = _selectedPreset.downswing;
-    final totalFrames = backswing + downswing;
-    final totalMs = Duration(
-      milliseconds: ((totalFrames / 30.0) * 1000).round(),
-    );
     return TempoConfig(
       ratio: _ratio,
       backswingUnits: backswing,
       downswingUnits: downswing,
-      totalCycle: totalMs,
     );
   }
 
@@ -148,83 +162,113 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Golf Tempo')),
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ChoiceChip(
-                    label: const Text('3:1 Full Swing'),
-                    selected: _ratio == TempoRatio.threeToOne,
-                    onSelected: (_) {
-                      setState(() {
-                        _ratio = TempoRatio.threeToOne;
-                        _selectedPreset = _selectedThreeToOne;
-                      });
-                      _savePrefs();
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  ChoiceChip(
-                    label: const Text('2:1 Short/Putting'),
-                    selected: _ratio == TempoRatio.twoToOne,
-                    onSelected: (_) {
-                      setState(() {
-                        _ratio = TempoRatio.twoToOne;
-                        _selectedPreset = _selectedTwoToOne;
-                      });
-                      _savePrefs();
-                    },
-                  ),
-                ],
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('3:1 Full Swing'),
+                      selected: _ratio == TempoRatio.threeToOne,
+                      onSelected: (_) {
+                        setState(() {
+                          _ratio = TempoRatio.threeToOne;
+                          _selectedPreset = _selectedThreeToOne;
+                        });
+                        _savePrefs();
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    ChoiceChip(
+                      label: const Text('2:1 Short/Putting'),
+                      selected: _ratio == TempoRatio.twoToOne,
+                      onSelected: (_) {
+                        setState(() {
+                          _ratio = TempoRatio.twoToOne;
+                          _selectedPreset = _selectedTwoToOne;
+                        });
+                        _savePrefs();
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Text('Swing speed'),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [for (final p in presets) _tempoChip(p)],
-                  ),
-                ],
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text('Tempo'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: [for (final p in presets) _tempoChip(p)],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Text('Interval between cycles'),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      for (final d in [2, 5, 15, 30])
-                        _gapChip(Duration(seconds: d)),
-                    ],
-                  ),
-                ],
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text('Sound'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        _soundChip(SoundSet.tones, 'Tones'),
+                        _soundChip(SoundSet.woodblock, 'Woodblock'),
+                        _soundChip(SoundSet.piano, 'Piano'),
+                        _soundChip(SoundSet.golf, 'Golf'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: Center(
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text('Interval between cycles'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        _gapChip(const Duration(seconds: 2)),
+                        _gapChip(const Duration(seconds: 5)),
+                        _gapChip(const Duration(seconds: 15)),
+                        _gapChip(const Duration(seconds: 30)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Text(
+                      'Ratio: ${_ratio == TempoRatio.threeToOne ? '3:1' : '2:1'}  •  ${_selectedPreset.backswing}:${_selectedPreset.downswing}',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 16),
                     ElevatedButton.icon(
                       icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
                       label: Text(_isPlaying ? 'Stop' : 'Start'),
@@ -235,8 +279,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
@@ -251,6 +296,24 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _gap = d);
         _engine.setGap(d);
         _savePrefs();
+      },
+    );
+  }
+
+  Widget _soundChip(SoundSet set, String label) {
+    final selected = _soundSet == set;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) async {
+        setState(() => _soundSet = set);
+        _savePrefs();
+        final key = _toSetKey(set);
+        if (_isPlaying) {
+          await _engine.queueSoundSetChange(key);
+        } else {
+          await _engine.setSoundSet(key);
+        }
       },
     );
   }
@@ -279,7 +342,6 @@ class _HomeScreenState extends State<HomeScreen> {
           await _engine.queueTempoChange(
             backswingUnits: cfg.backswingUnits,
             downswingUnits: cfg.downswingUnits,
-            totalCycle: cfg.totalCycle,
           );
         }
       },

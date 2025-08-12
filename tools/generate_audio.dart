@@ -1,16 +1,23 @@
 // Run with: dart run tools/generate_audio.dart
-// Generates WAV cycle files into assets/audio/cycles/
+// Generates WAV cycle files into assets/audio/cycles/ (per sound set) and SFX into assets/audio/sfx/
 
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 Future<void> main() async {
-  final outDir = Directory('assets/audio/cycles');
-  if (!outDir.existsSync()) {
-    outDir.createSync(recursive: true);
-  }
+  final cyclesRoot = Directory('assets/audio/cycles');
+  if (!cyclesRoot.existsSync()) cyclesRoot.createSync(recursive: true);
+  final sfxDir = Directory('assets/audio/sfx');
+  if (!sfxDir.existsSync()) sfxDir.createSync(recursive: true);
 
+  await _generateAllCycleSets(cyclesRoot);
+  await _generateSfx(sfxDir);
+
+  stdout.writeln('Done. Run: flutter pub get');
+}
+
+Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
   // Frame pairs per ratio; total duration computed at 30 fps
   final threeToOne = <_Pair>[
     _Pair(18, 6),
@@ -28,65 +35,200 @@ Future<void> main() async {
   ];
 
   const int sampleRate = 44100;
-  const Duration beepDuration = Duration(milliseconds: 60);
-  const Duration trailingGap = Duration.zero; // no embedded gap
-
-  // Precompute beeps
-  final int beepSamples = (beepDuration.inMilliseconds * sampleRate / 1000)
+  const Duration blipDuration = Duration(milliseconds: 60);
+  final int blipSamples = (blipDuration.inMilliseconds * sampleRate / 1000)
       .round();
-  final beep1 = _synthesizeSineWav(
+
+  // Build tone sets in memory
+  final tones_low = _synthesizeSineWav(
     frequencyHz: 550,
     sampleRate: sampleRate,
-    numSamples: beepSamples,
+    numSamples: blipSamples,
     amplitude: 0.25,
     applyEnvelope: true,
   );
-  final beep2 = _synthesizeSineWav(
+  final tones_mid = _synthesizeSineWav(
     frequencyHz: 750,
     sampleRate: sampleRate,
-    numSamples: beepSamples,
+    numSamples: blipSamples,
     amplitude: 0.25,
     applyEnvelope: true,
   );
-  final beep3 = _synthesizeSineWav(
+  final tones_high = _synthesizeSineWav(
     frequencyHz: 1000,
     sampleRate: sampleRate,
-    numSamples: beepSamples,
+    numSamples: blipSamples,
     amplitude: 0.25,
     applyEnvelope: true,
   );
 
-  Future<void> writeSet(String ratioKey, List<_Pair> pairs) async {
+  final woodblock_tick = _synthesizeResonantClick(
+    sampleRate: sampleRate,
+    durationMs: 60,
+    freqsHz: [1800, 3200],
+    amps: [0.9, 0.6],
+    decayMs: 50,
+  );
+
+  final piano_low = _synthesizeAdditiveTone(
+    fundamentalHz: 440,
+    partialAmps: const [1.0, 0.4, 0.2],
+    sampleRate: sampleRate,
+    durationMs: 70,
+    attackMs: 4,
+    decayMs: 60,
+  );
+  final piano_mid = _synthesizeAdditiveTone(
+    fundamentalHz: 660,
+    partialAmps: const [1.0, 0.35, 0.15],
+    sampleRate: sampleRate,
+    durationMs: 70,
+    attackMs: 4,
+    decayMs: 60,
+  );
+  final piano_high = _synthesizeAdditiveTone(
+    fundamentalHz: 880,
+    partialAmps: const [1.0, 0.3, 0.12],
+    sampleRate: sampleRate,
+    durationMs: 70,
+    attackMs: 4,
+    decayMs: 60,
+  );
+
+  final golf_tick = _synthesizeResonantClick(
+    sampleRate: sampleRate,
+    durationMs: 60,
+    freqsHz: [1200, 2400],
+    amps: [0.8, 0.5],
+    decayMs: 45,
+  );
+  final golf_woosh = _synthesizeNoiseWoosh(
+    sampleRate: sampleRate,
+    durationMs: 100,
+    startAmp: 0.2,
+    peakAmp: 0.6,
+    endAmp: 0.0,
+  );
+
+  // Define the 4 sound sets
+  final sets = <String, List<Uint8List>>{
+    'tones': [tones_low, tones_mid, tones_high],
+    'woodblock': [woodblock_tick, woodblock_tick, woodblock_tick],
+    'piano': [piano_low, piano_mid, piano_high],
+    'golf': [golf_tick, golf_tick, golf_woosh],
+  };
+
+  Future<void> writeSetDir(
+    String setName,
+    String ratioKey,
+    List<_Pair> pairs,
+  ) async {
+    final outDir = Directory('${cyclesRoot.path}/$setName');
+    if (!outDir.existsSync()) outDir.createSync(recursive: true);
+
+    final beeps = sets[setName]!; // [1,2,3]
+
     for (final p in pairs) {
       final totalFrames = p.backswing + p.downswing;
       final totalMs = ((totalFrames / 30.0) * 1000).round();
       final fileName = '${ratioKey}_${p.backswing}_${p.downswing}.wav';
       final path = '${outDir.path}/$fileName';
       final t1Ms = (totalMs * p.backswing / totalFrames).round();
-      final silence1Ms = (t1Ms - beepDuration.inMilliseconds).clamp(0, 1 << 31);
-      final silence2Ms = (totalMs - t1Ms - beepDuration.inMilliseconds).clamp(
+      final silence1Ms = (t1Ms - blipDuration.inMilliseconds).clamp(0, 1 << 31);
+      final silence2Ms = (totalMs - t1Ms - blipDuration.inMilliseconds).clamp(
         0,
         1 << 31,
       );
 
       final wav = _buildCycleWav(
         sampleRate: sampleRate,
-        beep1: beep1,
-        beep2: beep2,
-        beep3: beep3,
+        beep1: beeps[0],
+        beep2: beeps[1],
+        beep3: beeps[2],
         silence1Ms: silence1Ms as int,
         silence2Ms: silence2Ms as int,
-        trailingGapMs: trailingGap.inMilliseconds,
+        trailingGapMs: 0,
       );
       File(path).writeAsBytesSync(wav, flush: true);
       stdout.writeln('Wrote $path');
     }
   }
 
-  await writeSet('3to1', threeToOne);
-  await writeSet('2to1', twoToOne);
+  for (final set in sets.keys) {
+    await writeSetDir(set, '3to1', threeToOne);
+    await writeSetDir(set, '2to1', twoToOne);
+  }
+}
 
-  stdout.writeln('Done. Add assets path to pubspec and run: flutter pub get');
+Future<void> _generateSfx(Directory outDir) async {
+  const int sampleRate = 44100;
+
+  // Woodblock tick
+  final woodblock = _synthesizeResonantClick(
+    sampleRate: sampleRate,
+    durationMs: 60,
+    freqsHz: [1800, 3200],
+    amps: [0.9, 0.6],
+    decayMs: 50,
+  );
+  File(
+    '${outDir.path}/woodblock_tick.wav',
+  ).writeAsBytesSync(woodblock, flush: true);
+  stdout.writeln('Wrote ${outDir.path}/woodblock_tick.wav');
+
+  // Piano tones
+  final pianoLow = _synthesizeAdditiveTone(
+    fundamentalHz: 440,
+    partialAmps: const [1.0, 0.4, 0.2],
+    sampleRate: sampleRate,
+    durationMs: 70,
+    attackMs: 4,
+    decayMs: 60,
+  );
+  final pianoMid = _synthesizeAdditiveTone(
+    fundamentalHz: 660,
+    partialAmps: const [1.0, 0.35, 0.15],
+    sampleRate: sampleRate,
+    durationMs: 70,
+    attackMs: 4,
+    decayMs: 60,
+  );
+  final pianoHigh = _synthesizeAdditiveTone(
+    fundamentalHz: 880,
+    partialAmps: const [1.0, 0.3, 0.12],
+    sampleRate: sampleRate,
+    durationMs: 70,
+    attackMs: 4,
+    decayMs: 60,
+  );
+  File('${outDir.path}/piano_low.wav').writeAsBytesSync(pianoLow, flush: true);
+  File('${outDir.path}/piano_mid.wav').writeAsBytesSync(pianoMid, flush: true);
+  File(
+    '${outDir.path}/piano_high.wav',
+  ).writeAsBytesSync(pianoHigh, flush: true);
+  stdout.writeln('Wrote piano tones');
+
+  // Golf ticks and woosh
+  final golfTick = _synthesizeResonantClick(
+    sampleRate: sampleRate,
+    durationMs: 60,
+    freqsHz: [1200, 2400],
+    amps: [0.8, 0.5],
+    decayMs: 45,
+  );
+  final golfWoosh = _synthesizeNoiseWoosh(
+    sampleRate: sampleRate,
+    durationMs: 100,
+    startAmp: 0.2,
+    peakAmp: 0.6,
+    endAmp: 0.0,
+  );
+  File('${outDir.path}/golf_tick1.wav').writeAsBytesSync(golfTick, flush: true);
+  File('${outDir.path}/golf_tick2.wav').writeAsBytesSync(golfTick, flush: true);
+  File(
+    '${outDir.path}/golf_woosh.wav',
+  ).writeAsBytesSync(golfWoosh, flush: true);
+  stdout.writeln('Wrote golf ticks and woosh');
 }
 
 class _Pair {
@@ -212,4 +354,168 @@ Uint8List _buildCycleWav({
   out.add(pcmGap);
 
   return out.toBytes();
+}
+
+Uint8List _synthesizeResonantClick({
+  required int sampleRate,
+  required int durationMs,
+  required List<int> freqsHz,
+  required List<double> amps,
+  required int decayMs,
+}) {
+  final int numSamples = (durationMs * sampleRate / 1000).round();
+  final int subchunk2Size = numSamples * 2;
+  final int chunkSize = 36 + subchunk2Size;
+  final bytes = BytesBuilder();
+
+  void writeString(String s) => bytes.add(s.codeUnits);
+  void writeU32(int v) => bytes.add(
+    Uint8List(4)..buffer.asByteData().setUint32(0, v, Endian.little),
+  );
+  void writeU16(int v) => bytes.add(
+    Uint8List(2)..buffer.asByteData().setUint16(0, v, Endian.little),
+  );
+
+  writeString('RIFF');
+  writeU32(chunkSize);
+  writeString('WAVE');
+  writeString('fmt ');
+  writeU32(16);
+  writeU16(1);
+  writeU16(1);
+  writeU32(sampleRate);
+  writeU32(sampleRate * 2);
+  writeU16(2);
+  writeU16(16);
+  writeString('data');
+  writeU32(subchunk2Size);
+
+  final bd = BytesBuilder();
+  final tau = decayMs / 1000.0; // seconds
+  for (int n = 0; n < numSamples; n++) {
+    final t = n / sampleRate;
+    double sample = 0.0;
+    for (int i = 0; i < freqsHz.length; i++) {
+      sample += amps[i] * math.sin(2 * math.pi * freqsHz[i] * t);
+    }
+    final env = math.exp(-t / tau);
+    sample = (sample * env).clamp(-1.0, 1.0);
+    final s = ByteData(2)..setInt16(0, (sample * 32767).round(), Endian.little);
+    bd.add(s.buffer.asUint8List());
+  }
+  bytes.add(bd.toBytes());
+  return bytes.toBytes();
+}
+
+Uint8List _synthesizeAdditiveTone({
+  required int fundamentalHz,
+  required List<double> partialAmps,
+  required int sampleRate,
+  required int durationMs,
+  required int attackMs,
+  required int decayMs,
+}) {
+  final int numSamples = (durationMs * sampleRate / 1000).round();
+  final int subchunk2Size = numSamples * 2;
+  final int chunkSize = 36 + subchunk2Size;
+  final bytes = BytesBuilder();
+
+  void writeString(String s) => bytes.add(s.codeUnits);
+  void writeU32(int v) => bytes.add(
+    Uint8List(4)..buffer.asByteData().setUint32(0, v, Endian.little),
+  );
+  void writeU16(int v) => bytes.add(
+    Uint8List(2)..buffer.asByteData().setUint16(0, v, Endian.little),
+  );
+
+  writeString('RIFF');
+  writeU32(chunkSize);
+  writeString('WAVE');
+  writeString('fmt ');
+  writeU32(16);
+  writeU16(1);
+  writeU16(1);
+  writeU32(sampleRate);
+  writeU32(sampleRate * 2);
+  writeU16(2);
+  writeU16(16);
+  writeString('data');
+  writeU32(subchunk2Size);
+
+  final bd = BytesBuilder();
+  final attackSamp = (attackMs * sampleRate / 1000).round();
+  final decaySamp = (decayMs * sampleRate / 1000).round();
+  for (int n = 0; n < numSamples; n++) {
+    final t = n / sampleRate;
+    double sample = 0.0;
+    for (int i = 0; i < partialAmps.length; i++) {
+      sample +=
+          partialAmps[i] * math.sin(2 * math.pi * fundamentalHz * (i + 1) * t);
+    }
+    double env = 1.0;
+    if (n < attackSamp) {
+      env = n / (attackSamp == 0 ? 1 : attackSamp);
+    } else {
+      final dn = n - attackSamp;
+      env = math.exp(-dn / (decaySamp == 0 ? 1 : decaySamp));
+    }
+    sample = (sample * env).clamp(-1.0, 1.0);
+    final s = ByteData(2)..setInt16(0, (sample * 32767).round(), Endian.little);
+    bd.add(s.buffer.asUint8List());
+  }
+  bytes.add(bd.toBytes());
+  return bytes.toBytes();
+}
+
+Uint8List _synthesizeNoiseWoosh({
+  required int sampleRate,
+  required int durationMs,
+  required double startAmp,
+  required double peakAmp,
+  required double endAmp,
+}) {
+  final int numSamples = (durationMs * sampleRate / 1000).round();
+  final int subchunk2Size = numSamples * 2;
+  final int chunkSize = 36 + subchunk2Size;
+  final bytes = BytesBuilder();
+
+  void writeString(String s) => bytes.add(s.codeUnits);
+  void writeU32(int v) => bytes.add(
+    Uint8List(4)..buffer.asByteData().setUint32(0, v, Endian.little),
+  );
+  void writeU16(int v) => bytes.add(
+    Uint8List(2)..buffer.asByteData().setUint16(0, v, Endian.little),
+  );
+
+  writeString('RIFF');
+  writeU32(chunkSize);
+  writeString('WAVE');
+  writeString('fmt ');
+  writeU32(16);
+  writeU16(1);
+  writeU16(1);
+  writeU32(sampleRate);
+  writeU32(sampleRate * 2);
+  writeU16(2);
+  writeU16(16);
+  writeString('data');
+  writeU32(subchunk2Size);
+
+  final rnd = math.Random(42);
+  final bd = BytesBuilder();
+  for (int n = 0; n < numSamples; n++) {
+    final pos = n / numSamples;
+    double env;
+    if (pos < 0.5) {
+      env = startAmp + (peakAmp - startAmp) * (pos / 0.5);
+    } else {
+      env = peakAmp + (endAmp - peakAmp) * ((pos - 0.5) / 0.5);
+    }
+    final noise = (rnd.nextDouble() * 2 - 1);
+    final sample = (env * noise).clamp(-1.0, 1.0);
+    final s = ByteData(2)..setInt16(0, (sample * 32767).round(), Endian.little);
+    bd.add(s.buffer.asUint8List());
+  }
+  bytes.add(bd.toBytes());
+  return bytes.toBytes();
 }
