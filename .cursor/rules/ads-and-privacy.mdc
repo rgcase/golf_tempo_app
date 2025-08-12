@@ -3,3 +3,30 @@ description:
 globs:
 alwaysApply: false
 ---
+# Ads and Privacy (AdMob + UMP)
+
+This app uses a bottom banner ad. During development, use Google test unit IDs. For production, configure real AdMob IDs and consent.
+
+## Package
+- `google_mobile_ads`
+
+## Initialization
+- Initialize MobileAds early (e.g., in app start) and load a `BannerAd` on the Home screen.
+- During development use test unit IDs from Google’s docs.
+
+## Platform config
+- iOS: add the AdMob app ID in [ios/Runner/Info.plist](mdc:ios/Runner/Info.plist)
+- Android: add the AdMob app ID in [android/app/src/main/AndroidManifest.xml](mdc:android/app/src/main/AndroidManifest.xml)
+
+## Consent (EEA)
+- Implement UMP (User Messaging Platform) to collect consent when required.
+- Show the consent form at startup if needed; store and respect the choice.
+
+## Privacy policy
+- Publish a simple privacy policy covering AdMob data usage at [docs/privacy.html](mdc:docs/privacy.html) and link it from the store listings.
+
+## UX notes
+- Keep the banner within a `SafeArea`; avoid overlapping primary controls.
+- Show banner only on the main screen to reduce clutter.
+
+See: Website rule for Pages setup.

@@ -3,3 +3,51 @@ description:
 globs:
 alwaysApply: false
 ---
+# Audio Engine – Precise Three-Tone Loop
+
+Goal: Play three short tones in a repeating cycle with precise timing at ratios 3:1 or 2:1, without drift, even with screen off.
+
+## Packages
+- `just_audio` for playback and sequencing
+- `audio_session` to set correct audio category and mixing behavior
+- `wakelock_plus` to keep screen on while running (user-configurable)
+- `vibration` (optional) to mirror tones with haptics
+
+## Assets
+- Place three short WAV files in `assets/audio/`: `tone1_low.wav`, `tone2_mid.wav`, `tone3_high.wav` (≈50–70ms each)
+- Register assets in [pubspec.yaml](mdc:pubspec.yaml)
+
+## Timing model
+- Define total cycle duration `T`.
+- For 3:1 presets like 21:7 at 30fps, `backswing = 21 units`, `downswing = 7 units`.
+- Tone schedule within a cycle:
+  - t0: play tone1 (takeaway)
+  - t1 = T * backswing / (backswing + downswing): play tone2 (transition)
+  - t2 = T: play tone3 (impact)
+
+## Implementation approach
+- Build a looped sequence using `ConcatenatingAudioSource` of:
+  - `AudioSource.uri(tone1)`
+  - `SilenceAudioSource(duration: t1 - tone1Dur)`
+  - `AudioSource.uri(tone2)`
+  - `SilenceAudioSource(duration: t2 - t1 - tone2Dur)`
+  - `AudioSource.uri(tone3)`
+  - Optional `SilenceAudioSource(pauseBetweenCycles)`
+- Enable looping the entire concatenating source.
+- Avoid Dart timers for scheduling audio; rely on the player’s timeline for sample-accurate timing.
+
+## API (planned)
+Location: `lib/audio/audio_engine.dart`
+- `class AudioEngine` with methods:
+  - `Future<void> init(AudioTempoConfig config)` – loads assets, configures session
+  - `Future<void> start()` / `Future<void> stop()`
+  - `void setVolume(double volume)`
+  - `void setTempo(TempoConfig config)` – rebuilds sources and restarts if playing
+  - `void setHapticsEnabled(bool enabled)`
+
+## Edge cases
+- Validate that computed silences are >= 0 after subtracting tone durations; clamp as needed.
+- If volume is 0, still keep timing running if haptics are on.
+- Consider ducking other audio vs mixing; expose a toggle later if needed.
+
+See: Implementation Plan for presets and UI integration.

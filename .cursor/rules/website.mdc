@@ -3,3 +3,19 @@ description:
 globs:
 alwaysApply: false
 ---
+# Website (GitHub Pages)
+
+A minimal static site is required mainly for the privacy policy and a landing page.
+
+## Structure
+- Root for Pages: `docs/`
+  - [docs/index.html](mdc:docs/index.html) – app name, description, screenshots, store links, contact
+  - [docs/privacy.html](mdc:docs/privacy.html) – privacy policy (AdMob data usage)
+  - [docs/styles.css](mdc:docs/styles.css) – optional simple styling
+
+## Notes
+- Enable GitHub Pages on the repository using the `docs/` folder.
+- Keep content lightweight; optimize for mobile viewing.
+- Add badges/links to App Store and Google Play once available.
+
+See: Ads and Privacy rule for required disclosures.
