@@ -11,18 +11,21 @@ Future<void> main() async {
     outDir.createSync(recursive: true);
   }
 
-  // Presets (ratioNumerator: [backswingUnits, downswingUnits, totalCycleMs])
-  // 3:1: 18/6 (800ms), 21/7 (933ms), 24/8 (1067ms), 27/9 (1200ms)
-  // 2:1: 12/6 (600ms), 16/8 (800ms), 20/10 (1000ms)
-  final presets = <String, List<_Preset>>{
-    '3to1': [
-      _Preset(18, 6, 800),
-      _Preset(21, 7, 933),
-      _Preset(24, 8, 1067),
-      _Preset(27, 9, 1200),
-    ],
-    '2to1': [_Preset(12, 6, 600), _Preset(16, 8, 800), _Preset(20, 10, 1000)],
-  };
+  // Frame pairs per ratio; total duration computed at 30 fps
+  final threeToOne = <_Pair>[
+    _Pair(18, 6),
+    _Pair(21, 7),
+    _Pair(24, 8),
+    _Pair(27, 9),
+    _Pair(30, 10),
+  ];
+  final twoToOne = <_Pair>[
+    _Pair(14, 7),
+    _Pair(16, 8),
+    _Pair(18, 9),
+    _Pair(20, 10),
+    _Pair(22, 11),
+  ];
 
   const int sampleRate = 44100;
   const Duration beepDuration = Duration(milliseconds: 60);
@@ -53,15 +56,15 @@ Future<void> main() async {
     applyEnvelope: true,
   );
 
-  for (final entry in presets.entries) {
-    final ratioKey = entry.key;
-    for (final p in entry.value) {
+  Future<void> writeSet(String ratioKey, List<_Pair> pairs) async {
+    for (final p in pairs) {
+      final totalFrames = p.backswing + p.downswing;
+      final totalMs = ((totalFrames / 30.0) * 1000).round();
       final fileName = '${ratioKey}_${p.backswing}_${p.downswing}.wav';
       final path = '${outDir.path}/$fileName';
-      final t1Ms = (p.totalMs * p.backswing / (p.backswing + p.downswing))
-          .round();
+      final t1Ms = (totalMs * p.backswing / totalFrames).round();
       final silence1Ms = (t1Ms - beepDuration.inMilliseconds).clamp(0, 1 << 31);
-      final silence2Ms = (p.totalMs - t1Ms - beepDuration.inMilliseconds).clamp(
+      final silence2Ms = (totalMs - t1Ms - beepDuration.inMilliseconds).clamp(
         0,
         1 << 31,
       );
@@ -80,14 +83,16 @@ Future<void> main() async {
     }
   }
 
+  await writeSet('3to1', threeToOne);
+  await writeSet('2to1', twoToOne);
+
   stdout.writeln('Done. Add assets path to pubspec and run: flutter pub get');
 }
 
-class _Preset {
+class _Pair {
   final int backswing;
   final int downswing;
-  final int totalMs;
-  const _Preset(this.backswing, this.downswing, this.totalMs);
+  const _Pair(this.backswing, this.downswing);
 }
 
 Uint8List _synthesizeSineWav({
