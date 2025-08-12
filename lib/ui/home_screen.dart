@@ -13,12 +13,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final AudioEngine _engine = AudioEngine();
 
   bool _isPlaying = false;
+  bool _isBusy = false;
   TempoRatio _ratio = TempoRatio.threeToOne;
   Duration _gap = const Duration(seconds: 2);
 
   Future<void> _start() async {
-    if (_isPlaying) return;
+    if (_isBusy || _isPlaying) return;
     setState(() {
+      _isBusy = true;
       _isPlaying = true; // optimistic
     });
     try {
@@ -36,20 +38,23 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } finally {
       setState(() {
+        _isBusy = false;
         _isPlaying = _engine.isPlaying;
       });
     }
   }
 
   Future<void> _stop() async {
-    if (!_isPlaying) return;
+    if (_isBusy || !_isPlaying) return;
     setState(() {
+      _isBusy = true;
       _isPlaying = false; // optimistic
     });
     try {
       await _engine.stop();
     } finally {
       setState(() {
+        _isBusy = false;
         _isPlaying = _engine.isPlaying;
       });
     }
@@ -116,10 +121,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   Wrap(
                     spacing: 8,
                     children: [
-                      _gapChip(const Duration(seconds: 0), '0s'),
-                      _gapChip(const Duration(seconds: 1), '1s'),
                       _gapChip(const Duration(seconds: 2), '2s'),
-                      _gapChip(const Duration(seconds: 3), '3s'),
+                      _gapChip(const Duration(seconds: 5), '5s'),
+                      _gapChip(const Duration(seconds: 15), '15s'),
+                      _gapChip(const Duration(seconds: 30), '30s'),
                     ],
                   ),
                 ],
@@ -139,10 +144,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     ElevatedButton.icon(
                       icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
                       label: Text(_isPlaying ? 'Stop' : 'Start'),
-                      onPressed: () {
-                        _isPlaying ? _stop() : _start();
-                      },
+                      onPressed: _isBusy
+                          ? null
+                          : () {
+                              _isPlaying ? _stop() : _start();
+                            },
                     ),
+                    if (_isBusy) ...[
+                      const SizedBox(height: 12),
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ],
                   ],
                 ),
               ),
