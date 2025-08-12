@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../audio/audio_engine.dart';
 import '../state/tempo_models.dart';
 
-typedef TempoPair = ({int backswing, int downswing});
+typedef SwingSpeed = ({int backswing, int downswing});
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,14 +21,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Duration _gap = const Duration(seconds: 2);
 
   // Frame presets
-  final List<TempoPair> _threeToOnePresets = const <TempoPair>[
+  final List<SwingSpeed> _threeToOnePresets = const <SwingSpeed>[
     (backswing: 18, downswing: 6),
     (backswing: 21, downswing: 7),
     (backswing: 24, downswing: 8),
     (backswing: 27, downswing: 9),
     (backswing: 30, downswing: 10),
   ];
-  final List<TempoPair> _twoToOnePresets = const <TempoPair>[
+  final List<SwingSpeed> _twoToOnePresets = const <SwingSpeed>[
     (backswing: 14, downswing: 7),
     (backswing: 16, downswing: 8),
     (backswing: 18, downswing: 9),
@@ -37,11 +37,11 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   // Last-selected presets per ratio
-  TempoPair _selectedThreeToOne = (backswing: 21, downswing: 7);
-  TempoPair _selectedTwoToOne = (backswing: 16, downswing: 8);
+  SwingSpeed _selectedThreeToOne = (backswing: 21, downswing: 7);
+  SwingSpeed _selectedTwoToOne = (backswing: 16, downswing: 8);
 
   // Current selection
-  TempoPair _selectedPreset = (backswing: 21, downswing: 7);
+  SwingSpeed _selectedPreset = (backswing: 21, downswing: 7);
 
   @override
   void initState() {
@@ -142,7 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<TempoPair> presets = _ratio == TempoRatio.threeToOne
+    final List<SwingSpeed> presets = _ratio == TempoRatio.threeToOne
         ? _threeToOnePresets
         : _twoToOnePresets;
     return Scaffold(
@@ -188,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Text('Tempo'),
+                  const Text('Swing speed'),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -262,14 +262,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _tempoChip(TempoPair p) {
+  Widget _tempoChip(SwingSpeed p) {
     final selected =
         _selectedPreset.backswing == p.backswing &&
         _selectedPreset.downswing == p.downswing;
     return ChoiceChip(
       label: Text('${p.backswing}:${p.downswing}'),
       selected: selected,
-      onSelected: (_) {
+      onSelected: (_) async {
         setState(() {
           _selectedPreset = p;
           if (_ratio == TempoRatio.threeToOne) {
@@ -279,6 +279,16 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         });
         _savePrefs();
+
+        // If currently playing, queue change for next cycle
+        if (_isPlaying) {
+          final cfg = _configForSelection();
+          await _engine.queueTempoChange(
+            backswingUnits: cfg.backswingUnits,
+            downswingUnits: cfg.downswingUnits,
+            totalCycle: cfg.totalCycle,
+          );
+        }
       },
     );
   }

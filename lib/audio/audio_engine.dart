@@ -13,10 +13,11 @@ class AudioEngine {
   double _volume = 1.0;
   Duration _gapBetweenCycles = const Duration(seconds: 2);
 
-  StreamSubscription<ProcessingState>? _processingSub;
+  StreamSubscription<PlayerState>? _playerStateSub;
 
-  // Current tempo config
+  // Current and pending tempo configs
   _TempoRuntimeConfig? _config;
+  _TempoRuntimeConfig? _pendingConfig;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -52,9 +53,25 @@ class AudioEngine {
       downswingUnits: downswingUnits,
       totalCycle: totalCycle,
     );
-    if (_player != null) {
+    if (_player != null && !_isPlaying) {
       await _applySource();
     }
+  }
+
+  // Queue a tempo change to take effect at the next cycle boundary
+  Future<void> queueTempoChange({
+    required int backswingUnits,
+    required int downswingUnits,
+    required Duration totalCycle,
+  }) async {
+    if (!_initialized) {
+      await init();
+    }
+    _pendingConfig = _TempoRuntimeConfig(
+      backswingUnits: backswingUnits,
+      downswingUnits: downswingUnits,
+      totalCycle: totalCycle,
+    );
   }
 
   void setGap(Duration gap) {
@@ -74,31 +91,34 @@ class AudioEngine {
     }
     if (_isPlaying) return;
 
-    // (Re)create player
     await _disposePlayer();
     _player = AudioPlayer();
     await _player!.setVolume(_volume);
 
     await _applySource();
-
-    // Play once; no loop mode
     await _player!.setLoopMode(LoopMode.off);
 
-    // Listen for completion; on completion, wait configured gap then restart if still playing
-    _processingSub = _player!.processingStateStream.listen((state) async {
-      print('ProcessingState: $state, isPlaying: $_isPlaying');
-      if (state == ProcessingState.completed && _isPlaying) {
+    _playerStateSub = _player!.playerStateStream.listen((state) async {
+      if (!_isPlaying) return;
+      if (state.processingState == ProcessingState.completed) {
         try {
           await Future.delayed(_gapBetweenCycles);
-          if (_isPlaying) {
-            print('Restarting');
-            await _player!.seek(Duration.zero);
+          if (!_isPlaying || _player == null) return;
+          if (_pendingConfig != null) {
+            _config = _pendingConfig;
+            _pendingConfig = null;
+            await _applySource();
+            await _player!.play();
+          } else {
+            await _player!.seek(Duration.zero, index: 0);
             await _player!.play();
           }
         } catch (_) {}
       }
     });
 
+    // Must set _isPlaying = true *before* calling play(), because the listener
+    // gets called before play() returns.
     _isPlaying = true;
     await _player!.play();
   }
@@ -154,8 +174,8 @@ class AudioEngine {
   }
 
   Future<void> _disposePlayer() async {
-    await _processingSub?.cancel();
-    _processingSub = null;
+    await _playerStateSub?.cancel();
+    _playerStateSub = null;
     try {
       await _player?.stop();
     } catch (_) {}
