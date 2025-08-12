@@ -160,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ? _threeToOnePresets
         : _twoToOnePresets;
     return Scaffold(
-      appBar: AppBar(title: const Text('Golf Tempo')),
+      appBar: AppBar(title: const Text('SwingGroove Golf')),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(

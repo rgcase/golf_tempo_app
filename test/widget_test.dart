@@ -11,6 +11,6 @@ import 'package:golf_tempo_app/main.dart';
 void main() {
   testWidgets('App builds smoke test', (tester) async {
     await tester.pumpWidget(const GolfTempoApp());
-    expect(find.text('Golf Tempo'), findsOneWidget);
+    expect(find.text('SwingGroove Golf'), findsOneWidget);
   });
 }
