@@ -6,6 +6,8 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:just_audio/just_audio.dart';
 
+typedef SwingSpeed = ({int backswing, int downswing});
+
 class AudioEngine {
   AudioPlayer? _player;
   bool _initialized = false;
@@ -15,9 +17,9 @@ class AudioEngine {
 
   StreamSubscription<PlayerState>? _playerStateSub;
 
-  // Current and pending tempo configs
-  _TempoRuntimeConfig? _config;
-  _TempoRuntimeConfig? _pendingConfig;
+  // Current and pending swing speeds
+  SwingSpeed? _speed;
+  SwingSpeed? _pendingSpeed;
 
   Future<void> init() async {
     if (_initialized) return;
@@ -40,6 +42,7 @@ class AudioEngine {
     _initialized = true;
   }
 
+  // Kept for compatibility; totalCycle is unused
   Future<void> setTempo({
     required int backswingUnits,
     required int downswingUnits,
@@ -48,11 +51,7 @@ class AudioEngine {
     if (!_initialized) {
       await init();
     }
-    _config = _TempoRuntimeConfig(
-      backswingUnits: backswingUnits,
-      downswingUnits: downswingUnits,
-      totalCycle: totalCycle,
-    );
+    _speed = (backswing: backswingUnits, downswing: downswingUnits);
     if (_player != null && !_isPlaying) {
       await _applySource();
     }
@@ -67,11 +66,7 @@ class AudioEngine {
     if (!_initialized) {
       await init();
     }
-    _pendingConfig = _TempoRuntimeConfig(
-      backswingUnits: backswingUnits,
-      downswingUnits: downswingUnits,
-      totalCycle: totalCycle,
-    );
+    _pendingSpeed = (backswing: backswingUnits, downswing: downswingUnits);
   }
 
   void setGap(Duration gap) {
@@ -82,7 +77,7 @@ class AudioEngine {
     if (!_initialized) {
       await init();
     }
-    if (_config == null) {
+    if (_speed == null) {
       await setTempo(
         backswingUnits: 21,
         downswingUnits: 7,
@@ -104,9 +99,9 @@ class AudioEngine {
         try {
           await Future.delayed(_gapBetweenCycles);
           if (!_isPlaying || _player == null) return;
-          if (_pendingConfig != null) {
-            _config = _pendingConfig;
-            _pendingConfig = null;
+          if (_pendingSpeed != null) {
+            _speed = _pendingSpeed;
+            _pendingSpeed = null;
             await _applySource();
             await _player!.play();
           } else {
@@ -117,10 +112,8 @@ class AudioEngine {
       }
     });
 
-    // Must set _isPlaying = true *before* calling play(), because the listener
-    // gets called before play() returns.
-    _isPlaying = true;
     await _player!.play();
+    _isPlaying = true;
   }
 
   Future<void> stop() async {
@@ -153,14 +146,12 @@ class AudioEngine {
   }
 
   Future<void> _applySource() async {
-    if (_player == null || _config == null) return;
-    final cfg = _config!;
+    if (_player == null || _speed == null) return;
+    final s = _speed!;
 
-    final ratioKey = cfg.backswingUnits ~/ cfg.downswingUnits == 3
-        ? '3to1'
-        : '2to1';
+    final ratioKey = s.backswing ~/ s.downswing == 3 ? '3to1' : '2to1';
     final assetPath =
-        'assets/audio/cycles/${ratioKey}_${cfg.backswingUnits}_${cfg.downswingUnits}.wav';
+        'assets/audio/cycles/${ratioKey}_${s.backswing}_${s.downswing}.wav';
 
     final data = await rootBundle.load(assetPath);
     final bytes = data.buffer.asUint8List();
@@ -184,16 +175,4 @@ class AudioEngine {
     } catch (_) {}
     _player = null;
   }
-}
-
-class _TempoRuntimeConfig {
-  final int backswingUnits;
-  final int downswingUnits;
-  final Duration totalCycle;
-
-  const _TempoRuntimeConfig({
-    required this.backswingUnits,
-    required this.downswingUnits,
-    required this.totalCycle,
-  });
 }

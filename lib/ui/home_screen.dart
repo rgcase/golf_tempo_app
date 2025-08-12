@@ -212,10 +212,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     runSpacing: 8,
                     alignment: WrapAlignment.center,
                     children: [
-                      _gapChip(const Duration(seconds: 2)),
-                      _gapChip(const Duration(seconds: 5)),
-                      _gapChip(const Duration(seconds: 15)),
-                      _gapChip(const Duration(seconds: 30)),
+                      for (final d in [2, 5, 15, 30])
+                        _gapChip(Duration(seconds: d)),
                     ],
                   ),
                 ],
@@ -227,11 +225,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'Ratio: ${_ratio == TempoRatio.threeToOne ? '3:1' : '2:1'}  •  ${_selectedPreset.backswing}:${_selectedPreset.downswing}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
                     ElevatedButton.icon(
                       icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
                       label: Text(_isPlaying ? 'Stop' : 'Start'),
