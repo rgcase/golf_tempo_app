@@ -86,10 +86,12 @@ class AudioEngine {
 
     // Listen for completion; on completion, wait configured gap then restart if still playing
     _processingSub = _player!.processingStateStream.listen((state) async {
+      print('ProcessingState: $state, isPlaying: $_isPlaying');
       if (state == ProcessingState.completed && _isPlaying) {
         try {
           await Future.delayed(_gapBetweenCycles);
           if (_isPlaying) {
+            print('Restarting');
             await _player!.seek(Duration.zero);
             await _player!.play();
           }
@@ -97,8 +99,8 @@ class AudioEngine {
       }
     });
 
-    await _player!.play();
     _isPlaying = true;
+    await _player!.play();
   }
 
   Future<void> stop() async {
