@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import '../audio/audio_engine.dart';
 import '../state/tempo_models.dart';
+import '../ads/banner_ad_widget.dart';
 
 typedef SwingSpeed = ({int backswing, int downswing});
 
@@ -304,6 +305,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Ad banner inside content (will move with content)
+              const Padding(
+                padding: EdgeInsets.only(top: 8.0),
+                child: Center(
+                  child: BannerAdWidget(
+                    // Google test ad unit; replace with real per platform for release.
+                    adUnitId: 'ca-app-pub-3940256099942544/2934735716',
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
