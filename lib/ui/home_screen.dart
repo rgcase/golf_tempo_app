@@ -297,13 +297,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         _isPlaying ? _stop() : _start();
                       },
                     ),
-                    if (_systemVolume == 0.0) ...[
-                      const SizedBox(height: 8),
-                      const Text(
-                        'System volume is muted. Increase volume to hear tones.',
-                        style: TextStyle(color: Colors.red),
+                    const SizedBox(height: 8),
+                    Text(
+                      'System volume is muted. Increase volume to hear tones.',
+                      style: TextStyle(
+                        color: _systemVolume == 0.0 ? Colors.red : Colors.white,
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
