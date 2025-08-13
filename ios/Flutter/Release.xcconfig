@@ -1,2 +1,6 @@
+#include? "Runner/Configs/Secrets.xcconfig"
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+
+// Pass banner ad unit to Dart in release/profile without CLI flags.
+DART_DEFINES=$(inherited),$(DART_DEFINE_ADMOB_BANNER_IOS)

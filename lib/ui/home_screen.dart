@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:io' show Platform;
 import 'package:duration/duration.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -175,6 +177,26 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _bannerAdUnitId() {
+    if (Platform.isIOS) {
+      const test = 'ca-app-pub-3940256099942544/2934735716';
+      if (kReleaseMode) {
+        const real = String.fromEnvironment('ADMOB_BANNER_IOS');
+        return real.isEmpty ? test : real;
+      }
+      return test;
+    }
+    if (Platform.isAndroid) {
+      const test = 'ca-app-pub-3940256099942544/6300978111';
+      if (kReleaseMode) {
+        const real = String.fromEnvironment('ADMOB_BANNER_ANDROID');
+        return real.isEmpty ? test : real;
+      }
+      return test;
+    }
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<SwingSpeed> presets = _ratio == TempoRatio.threeToOne
@@ -308,14 +330,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              // Ad banner inside content (will move with content)
-              const Padding(
-                padding: EdgeInsets.only(top: 8.0),
+              // Ad banner
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
                 child: Center(
-                  child: BannerAdWidget(
-                    // Google test ad unit; replace with real per platform for release.
-                    adUnitId: 'ca-app-pub-3940256099942544/2934735716',
-                  ),
+                  child: BannerAdWidget(adUnitId: _bannerAdUnitId()),
                 ),
               ),
               const SizedBox(height: 16),
