@@ -32,9 +32,9 @@ Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
   ];
 
   const int sampleRate = 44100;
-  const Duration blipDuration = Duration(milliseconds: 60);
-  final int blipSamples = (blipDuration.inMilliseconds * sampleRate / 1000)
-      .round();
+  const int leadInMs = 15; // Prepend silence so first hit isn't at t=0
+  const int defaultBlipMs = 60; // for synthesized tones; samples may differ
+  final int blipSamples = (defaultBlipMs * sampleRate / 1000).round();
 
   // Build tone sets in memory
   final tones_low = _synthesizeSineWav(
@@ -59,12 +59,22 @@ Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
     applyEnvelope: true,
   );
 
-  final woodblock_tick = _synthesizeResonantClick(
+  // Load external woodblock sample if present and apply micro fades.
+  Uint8List woodblock_tick = _loadExternalWavOr(
+    fallback: _synthesizeResonantClick(
+      sampleRate: sampleRate,
+      durationMs: defaultBlipMs,
+      freqsHz: [1800, 3200],
+      amps: [0.9, 0.6],
+      decayMs: 50,
+    ),
+    path: 'tools/samples/woodblock/tick.wav',
+  );
+  woodblock_tick = _applyMicroFadeToWav(
+    wav: woodblock_tick,
     sampleRate: sampleRate,
-    durationMs: 60,
-    freqsHz: [1800, 3200],
-    amps: [0.9, 0.6],
-    decayMs: 50,
+    fadeInMs: 3,
+    fadeOutMs: 3,
   );
 
   final piano_low = _synthesizeAdditiveTone(
@@ -131,14 +141,17 @@ Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
       final fileName = '${ratioKey}_${p.backswing}_${p.downswing}.wav';
       final path = '${outDir.path}/$fileName';
       final t1Ms = (totalMs * p.backswing / totalFrames).round();
-      final silence1Ms = (t1Ms - blipDuration.inMilliseconds).clamp(0, 1 << 31);
-      final silence2Ms = (totalMs - t1Ms - blipDuration.inMilliseconds).clamp(
-        0,
-        1 << 31,
-      );
+
+      // Actual durations from WAVs (beeps may differ in length)
+      final d1 = _wavDurationMs(beeps[0], sampleRate);
+      final d2 = _wavDurationMs(beeps[1], sampleRate);
+
+      final silence1Ms = (t1Ms - d1 - leadInMs).clamp(0, 1 << 31);
+      final silence2Ms = (totalMs - t1Ms - d2).clamp(0, 1 << 31);
 
       final wav = _buildCycleWav(
         sampleRate: sampleRate,
+        leadInMs: leadInMs,
         beep1: beeps[0],
         beep2: beeps[1],
         beep3: beeps[2],
@@ -220,8 +233,25 @@ Uint8List _synthesizeSineWav({
   return bytes.toBytes();
 }
 
+Uint8List _loadExternalWavOr({
+  required Uint8List fallback,
+  required String path,
+}) {
+  final f = File(path);
+  if (!f.existsSync()) return fallback;
+  try {
+    final bytes = f.readAsBytesSync();
+    // Ensure it's a WAV with header length >= 44 bytes.
+    if (bytes.length < 44) return fallback;
+    return bytes;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 Uint8List _buildCycleWav({
   required int sampleRate,
+  int leadInMs = 0,
   required Uint8List beep1,
   required Uint8List beep2,
   required Uint8List beep3,
@@ -238,11 +268,13 @@ Uint8List _buildCycleWav({
   final pcm1 = pcmFromWav(beep1);
   final pcm2 = pcmFromWav(beep2);
   final pcm3 = pcmFromWav(beep3);
+  final pcmLead = silencePcm(leadInMs);
   final pcmSil1 = silencePcm(silence1Ms);
   final pcmSil2 = silencePcm(silence2Ms);
   final pcmGap = silencePcm(trailingGapMs);
 
   final subchunk2Size =
+      pcmLead.length +
       pcm1.length +
       pcmSil1.length +
       pcm2.length +
@@ -272,6 +304,7 @@ Uint8List _buildCycleWav({
   writeString('data');
   writeU32(subchunk2Size);
 
+  out.add(pcmLead);
   out.add(pcm1);
   out.add(pcmSil1);
   out.add(pcm2);
@@ -279,6 +312,44 @@ Uint8List _buildCycleWav({
   out.add(pcm3);
   out.add(pcmGap);
 
+  return out.toBytes();
+}
+
+int _wavDurationMs(Uint8List wav, int sampleRate) {
+  final pcmLen = wav.length - 44;
+  if (pcmLen <= 0) return 0;
+  final samples = pcmLen ~/ 2; // mono 16-bit
+  return ((samples * 1000) / sampleRate).round();
+}
+
+Uint8List _applyMicroFadeToWav({
+  required Uint8List wav,
+  required int sampleRate,
+  int fadeInMs = 3,
+  int fadeOutMs = 3,
+}) {
+  if (wav.length < 44) return wav;
+  final header = wav.sublist(0, 44);
+  final pcm = wav.sublist(44).buffer.asByteData();
+  final totalSamples = pcm.lengthInBytes ~/ 2;
+  final fadeInSamples = (fadeInMs * sampleRate / 1000).round();
+  final fadeOutSamples = (fadeOutMs * sampleRate / 1000).round();
+
+  for (int i = 0; i < totalSamples; i++) {
+    double gain = 1.0;
+    if (i < fadeInSamples) {
+      gain = i / (fadeInSamples == 0 ? 1 : fadeInSamples);
+    } else if (i > totalSamples - fadeOutSamples) {
+      final n = totalSamples - i;
+      gain = n / (fadeOutSamples == 0 ? 1 : fadeOutSamples);
+    }
+    final s = pcm.getInt16(i * 2, Endian.little);
+    final out = (s * gain).round().clamp(-32768, 32767);
+    pcm.setInt16(i * 2, out, Endian.little);
+  }
+  final out = BytesBuilder();
+  out.add(header);
+  out.add(wav.sublist(44));
   return out.toBytes();
 }
 
