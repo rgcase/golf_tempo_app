@@ -122,7 +122,7 @@ class AudioEngine {
       await Future.delayed(_gapBetweenCycles);
       if (!_isPlaying || _player == null) return;
 
-      // Apply pending changes
+      // Apply pending changes (take effect on the very next iteration)
       if (_pendingSoundSet != null || _pendingSpeed != null) {
         if (_pendingSoundSet != null) {
           _soundSet = _pendingSoundSet!;
@@ -133,7 +133,11 @@ class AudioEngine {
           _pendingSpeed = null;
         }
         await _applySource();
-        await _player!.resume();
+        if (_currentAssetPath != null) {
+          await _player!.play(ap.AssetSource(_currentAssetPath!));
+        } else {
+          await _player!.resume();
+        }
       } else {
         // Restart same asset
         await _player!.seek(Duration.zero);
