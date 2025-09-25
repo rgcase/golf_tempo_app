@@ -7,6 +7,8 @@ import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import '../audio/audio_engine.dart';
 import '../state/tempo_models.dart';
 import '../ads/banner_ad_widget.dart';
+import '../iap/iap_service.dart';
+import '../iap/ios_iap_service_impl.dart';
 
 typedef SwingSpeed = ({int backswing, int downswing});
 
@@ -21,12 +23,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final AudioEngine _engine = AudioEngine();
+  final IapService _iap = IosIapServiceImpl();
 
   bool _isPlaying = false;
   double _systemVolume = 1.0;
   TempoRatio _ratio = TempoRatio.threeToOne;
   Duration _gap = const Duration(seconds: 2);
   SoundSet _soundSet = SoundSet.tones;
+  bool _adsRemoved = false;
 
   // Frame presets
   final List<SwingSpeed> _threeToOnePresets = const <SwingSpeed>[
@@ -56,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadPrefs();
     _initVolumeListener();
+    _initIap();
   }
 
   Future<void> _initVolumeListener() async {
@@ -72,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     FlutterVolumeController.removeListener();
+    _iap.dispose();
     super.dispose();
   }
 
@@ -99,6 +105,60 @@ class _HomeScreenState extends State<HomeScreen> {
       _gap = Duration(milliseconds: gapMs);
       _soundSet = _fromSetKey(setKey);
     });
+  }
+
+  Future<void> _initIap() async {
+    await _iap.init();
+    if (!mounted) return;
+    setState(() {
+      _adsRemoved = _iap.adsRemoved;
+    });
+  }
+
+  Future<void> _showRemoveAdsDialog() async {
+    final product = await _iap.loadRemoveAdsProduct();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        final priceLabel = product?.price ?? '';
+        return AlertDialog(
+          title: const Text('Remove ads forever'),
+          content: product == null
+              ? const Text(
+                  'In-app purchases are currently unavailable. Please try again later.',
+                )
+              : Text('Pay $priceLabel one time to remove ads permanently.'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _iap.restore();
+                await Future.delayed(const Duration(milliseconds: 300));
+                if (!mounted) return;
+                setState(() => _adsRemoved = _iap.adsRemoved);
+                if (mounted) Navigator.of(ctx).pop();
+              },
+              child: const Text('Restore Purchases'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            if (product != null)
+              ElevatedButton(
+                onPressed: () async {
+                  await _iap.buyRemoveAds(product);
+                  await Future.delayed(const Duration(milliseconds: 300));
+                  if (!mounted) return;
+                  setState(() => _adsRemoved = _iap.adsRemoved);
+                  if (mounted) Navigator.of(ctx).pop();
+                },
+                child: Text('Buy for ${product.price}'),
+              ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _savePrefs() async {
@@ -178,8 +238,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _bannerAdUnitId() {
+    const forceTest = bool.fromEnvironment(
+      'FORCE_TEST_ADS',
+      defaultValue: false,
+    );
     if (Platform.isIOS) {
       const test = 'ca-app-pub-3940256099942544/2934735716';
+      if (forceTest) return test;
       if (kReleaseMode) {
         const real = String.fromEnvironment('ADMOB_BANNER_IOS');
         return real.isEmpty ? test : real;
@@ -188,6 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (Platform.isAndroid) {
       const test = 'ca-app-pub-3940256099942544/6300978111';
+      if (forceTest) return test;
       if (kReleaseMode) {
         const real = String.fromEnvironment('ADMOB_BANNER_ANDROID');
         return real.isEmpty ? test : real;
@@ -330,14 +396,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              // Ad banner
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Center(
-                  child: BannerAdWidget(adUnitId: _bannerAdUnitId()),
+              // Ad banner and support link (hidden if purchased)
+              if (!_adsRemoved) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Center(
+                    child: BannerAdWidget(adUnitId: _bannerAdUnitId()),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _showRemoveAdsDialog,
+                  child: const Text(
+                    'Support development and remove ads forever?',
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                const Padding(
+                  padding: EdgeInsets.only(top: 8.0),
+                  child: Text('Thanks for supporting! Ads are disabled.'),
+                ),
+                const SizedBox(height: 16),
+              ],
             ],
           ),
         ),

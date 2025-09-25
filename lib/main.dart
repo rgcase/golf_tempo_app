@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'ui/home_screen.dart';
+import 'consent/consent_manager.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Request UMP consent (best-effort) before initializing ads.
+  final consent = ConsentManager();
+  // Fire and forget; do not block app startup excessively.
+  consent.requestConsentIfNeeded();
+  // Optionally register a test device ID when provided via --dart-define.
+  const testDeviceId = String.fromEnvironment('ADMOB_TEST_DEVICE_ID');
+  if (testDeviceId.isNotEmpty) {
+    MobileAds.instance.updateRequestConfiguration(
+      RequestConfiguration(testDeviceIds: [testDeviceId]),
+    );
+  }
   MobileAds.instance.initialize();
   runApp(const GolfTempoApp());
 }

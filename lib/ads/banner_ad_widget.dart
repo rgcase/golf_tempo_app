@@ -22,6 +22,11 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
       listener: BannerAdListener(
         onAdLoaded: (ad) => setState(() => _loaded = true),
         onAdFailedToLoad: (ad, error) {
+          // Helpful for debugging no-fill/config issues
+          // ignore: avoid_print
+          print(
+            '[AdMob] Banner failed to load: code=${error.code} message=${error.message} domain=${error.domain}',
+          );
           ad.dispose();
           setState(() => _loaded = false);
         },
