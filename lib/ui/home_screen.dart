@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:duration/duration.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../audio/audio_engine.dart';
 import '../state/tempo_models.dart';
 import '../ads/banner_ad_widget.dart';
@@ -70,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
     FlutterVolumeController.addListener((v) {
       if (!mounted) return;
-      setState(() => _systemVolume = (v ?? _systemVolume));
+      setState(() => _systemVolume = v);
     });
   }
 
@@ -242,10 +243,15 @@ class _HomeScreenState extends State<HomeScreen> {
       'FORCE_TEST_ADS',
       defaultValue: false,
     );
+    // Allow using real units in Profile via --dart-define=FORCE_REAL_ADS=true.
+    const forceReal = bool.fromEnvironment(
+      'FORCE_REAL_ADS',
+      defaultValue: false,
+    );
     if (Platform.isIOS) {
       const test = 'ca-app-pub-3940256099942544/2934735716';
       if (forceTest) return test;
-      if (kReleaseMode) {
+      if (kReleaseMode || forceReal) {
         const real = String.fromEnvironment('ADMOB_BANNER_IOS');
         return real.isEmpty ? test : real;
       }
@@ -254,13 +260,27 @@ class _HomeScreenState extends State<HomeScreen> {
     if (Platform.isAndroid) {
       const test = 'ca-app-pub-3940256099942544/6300978111';
       if (forceTest) return test;
-      if (kReleaseMode) {
+      if (kReleaseMode || forceReal) {
         const real = String.fromEnvironment('ADMOB_BANNER_ANDROID');
         return real.isEmpty ? test : real;
       }
       return test;
     }
     return '';
+  }
+
+  Future<void> _openAdInspector() async {
+    try {
+      MobileAds.instance.openAdInspector((error) {
+        if (!mounted) return;
+        final message = error == null
+            ? 'Ad Inspector closed.'
+            : 'Ad Inspector error: ${error.message}';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      });
+    } catch (_) {}
   }
 
   @override
@@ -392,6 +412,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: _systemVolume == 0.0 ? Colors.red : Colors.white,
                       ),
                     ),
+                    if (!kReleaseMode ||
+                        const bool.fromEnvironment(
+                          'FORCE_TEST_ADS',
+                          defaultValue: false,
+                        ))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: OutlinedButton(
+                          onPressed: _openAdInspector,
+                          child: const Text('Open Ad Inspector'),
+                        ),
+                      ),
                   ],
                 ),
               ),
