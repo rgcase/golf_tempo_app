@@ -73,7 +73,6 @@ flutter:
   assets:
     - assets/audio/
     - assets/audio/cycles/
-    - assets/audio/cycles/golf/
     - assets/audio/cycles/piano/
     - assets/audio/cycles/tones/
     - assets/audio/cycles/woodblock/

@@ -13,7 +13,7 @@ import '../iap/ios_iap_service_impl.dart';
 
 typedef SwingSpeed = ({int backswing, int downswing});
 
-enum SoundSet { tones, woodblock, piano, golf }
+enum SoundSet { tones, woodblock, piano }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -180,12 +180,10 @@ class _HomeScreenState extends State<HomeScreen> {
     SoundSet.tones => 'tones',
     SoundSet.woodblock => 'woodblock',
     SoundSet.piano => 'piano',
-    SoundSet.golf => 'golf',
   };
   SoundSet _fromSetKey(String k) => switch (k) {
     'woodblock' => SoundSet.woodblock,
     'piano' => SoundSet.piano,
-    'golf' => SoundSet.golf,
     _ => SoundSet.tones,
   };
 
@@ -359,7 +357,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         _soundChip(SoundSet.tones, 'Tones'),
                         _soundChip(SoundSet.woodblock, 'Woodblock'),
                         _soundChip(SoundSet.piano, 'Piano'),
-                        _soundChip(SoundSet.golf, 'Golf'),
+                        // Golf removed
                       ],
                     ),
                   ],

@@ -77,52 +77,70 @@ Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
     fadeOutMs: 3,
   );
 
-  final piano_low = _synthesizeAdditiveTone(
-    fundamentalHz: 440,
-    partialAmps: const [1.0, 0.4, 0.2],
-    sampleRate: sampleRate,
-    durationMs: 70,
-    attackMs: 4,
-    decayMs: 60,
+  // Piano: prefer external WAVs if available; otherwise synth fallback.
+  Uint8List piano_low = _loadExternalWavOr(
+    fallback: _synthesizeAdditiveTone(
+      fundamentalHz: 440,
+      partialAmps: const [1.0, 0.4, 0.2],
+      sampleRate: sampleRate,
+      durationMs: 70,
+      attackMs: 4,
+      decayMs: 60,
+    ),
+    path: 'tools/samples/piano/low.wav',
   );
-  final piano_mid = _synthesizeAdditiveTone(
-    fundamentalHz: 660,
-    partialAmps: const [1.0, 0.35, 0.15],
-    sampleRate: sampleRate,
-    durationMs: 70,
-    attackMs: 4,
-    decayMs: 60,
+  Uint8List piano_mid = _loadExternalWavOr(
+    fallback: _synthesizeAdditiveTone(
+      fundamentalHz: 660,
+      partialAmps: const [1.0, 0.35, 0.15],
+      sampleRate: sampleRate,
+      durationMs: 70,
+      attackMs: 4,
+      decayMs: 60,
+    ),
+    path: 'tools/samples/piano/mid.wav',
   );
-  final piano_high = _synthesizeAdditiveTone(
-    fundamentalHz: 880,
-    partialAmps: const [1.0, 0.3, 0.12],
-    sampleRate: sampleRate,
-    durationMs: 70,
-    attackMs: 4,
-    decayMs: 60,
+  Uint8List piano_high = _loadExternalWavOr(
+    fallback: _synthesizeAdditiveTone(
+      fundamentalHz: 880,
+      partialAmps: const [1.0, 0.3, 0.12],
+      sampleRate: sampleRate,
+      durationMs: 70,
+      attackMs: 4,
+      decayMs: 60,
+    ),
+    path: 'tools/samples/piano/high.wav',
   );
+  // Apply micro-fades and DC removal to piano samples to avoid clicks.
+  piano_low = _applyMicroFadeToWav(
+    wav: piano_low,
+    sampleRate: sampleRate,
+    fadeInMs: 20,
+    fadeOutMs: 20,
+  );
+  piano_low = _removeDcAndNormalize(wav: piano_low);
+  piano_mid = _applyMicroFadeToWav(
+    wav: piano_mid,
+    sampleRate: sampleRate,
+    fadeInMs: 20,
+    fadeOutMs: 20,
+  );
+  piano_mid = _removeDcAndNormalize(wav: piano_mid);
+  piano_high = _applyMicroFadeToWav(
+    wav: piano_high,
+    sampleRate: sampleRate,
+    fadeInMs: 20,
+    fadeOutMs: 20,
+  );
+  piano_high = _removeDcAndNormalize(wav: piano_high);
 
-  final golf_tick = _synthesizeResonantClick(
-    sampleRate: sampleRate,
-    durationMs: 60,
-    freqsHz: [1200, 2400],
-    amps: [0.8, 0.5],
-    decayMs: 45,
-  );
-  final golf_woosh = _synthesizeNoiseWoosh(
-    sampleRate: sampleRate,
-    durationMs: 100,
-    startAmp: 0.2,
-    peakAmp: 0.6,
-    endAmp: 0.0,
-  );
+  // Golf set removed.
 
   // Define the 4 sound sets
   final sets = <String, List<Uint8List>>{
     'tones': [tones_low, tones_mid, tones_high],
     'woodblock': [woodblock_tick, woodblock_tick, woodblock_tick],
     'piano': [piano_low, piano_mid, piano_high],
-    'golf': [golf_tick, golf_tick, golf_woosh],
   };
 
   Future<void> writeSetDir(
@@ -157,7 +175,8 @@ Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
         beep3: beeps[2],
         silence1Ms: silence1Ms as int,
         silence2Ms: silence2Ms as int,
-        trailingGapMs: 0,
+        trailingGapMs: 10,
+        crossfadeMs: setName == 'piano' ? 40 : 0,
       );
       File(path).writeAsBytesSync(wav, flush: true);
       stdout.writeln('Wrote $path');
@@ -258,6 +277,7 @@ Uint8List _buildCycleWav({
   required int silence1Ms,
   required int silence2Ms,
   required int trailingGapMs,
+  int crossfadeMs = 0,
 }) {
   Uint8List pcmFromWav(Uint8List wav) => wav.sublist(44);
   Uint8List silencePcm(int ms) {
@@ -268,19 +288,102 @@ Uint8List _buildCycleWav({
   final pcm1 = pcmFromWav(beep1);
   final pcm2 = pcmFromWav(beep2);
   final pcm3 = pcmFromWav(beep3);
+  final cfSamples = (crossfadeMs * sampleRate / 1000).round();
+
+  // Soften the attack of the 2nd and 3rd hits inside the assembled cycle
+  // to avoid residual clicks right before they start.
+  Uint8List _attackSoften(Uint8List src, int ms) {
+    final out = Uint8List.fromList(src);
+    final bd = out.buffer.asByteData();
+    final n = (ms * sampleRate / 1000).clamp(0, out.length ~/ 2);
+    for (int i = 0; i < n; i++) {
+      final s = bd.getInt16(i * 2, Endian.little).toDouble();
+      final t = i / (n == 0 ? 1 : n);
+      final w = t; // linear fade-in on top of existing fades/crossfades
+      final v = (s * w).round().clamp(-32768, 32767) as int;
+      bd.setInt16(i * 2, v, Endian.little);
+    }
+    return out;
+  }
+
+  final pcm2Soft = _attackSoften(pcm2, 10);
+  final pcm3Soft = _attackSoften(pcm3, 10);
+
+  Uint8List crossfade(Uint8List a, Uint8List b) {
+    if (cfSamples <= 0) {
+      final out = BytesBuilder();
+      out.add(a);
+      out.add(b);
+      return out.toBytes();
+    }
+    final aSamples = a.length ~/ 2;
+    final bSamples = b.length ~/ 2;
+    final n = aSamples < cfSamples || bSamples < cfSamples
+        ? (aSamples < bSamples ? aSamples : bSamples)
+        : cfSamples;
+    final out = BytesBuilder();
+    // a without its last n samples
+    out.add(a.sublist(0, (aSamples - n) * 2));
+    // crossfade region
+    for (int i = 0; i < n; i++) {
+      final aIdx = (aSamples - n + i) * 2;
+      final bIdx = i * 2;
+      final aVal = ByteData.sublistView(
+        a,
+        aIdx,
+        aIdx + 2,
+      ).getInt16(0, Endian.little).toDouble();
+      final bVal = ByteData.sublistView(
+        b,
+        bIdx,
+        bIdx + 2,
+      ).getInt16(0, Endian.little).toDouble();
+      final t = i / n;
+      // Equal-power crossfade weights
+      final wA = math.cos(t * (math.pi / 2));
+      final wB = math.sin(t * (math.pi / 2));
+      final mixed = (aVal * wA + bVal * wB).round().clamp(-32768, 32767) as int;
+      final bd = ByteData(2)..setInt16(0, mixed, Endian.little);
+      out.add(bd.buffer.asUint8List());
+    }
+    // remainder of b after crossfade
+    out.add(b.sublist(n * 2));
+    return out.toBytes();
+  }
+
   final pcmLead = silencePcm(leadInMs);
   final pcmSil1 = silencePcm(silence1Ms);
   final pcmSil2 = silencePcm(silence2Ms);
   final pcmGap = silencePcm(trailingGapMs);
 
-  final subchunk2Size =
-      pcmLead.length +
-      pcm1.length +
-      pcmSil1.length +
-      pcm2.length +
-      pcmSil2.length +
-      pcm3.length +
-      pcmGap.length;
+  // Build dynamic PCM content with optional crossfades, then write header.
+  final content = BytesBuilder();
+  if (cfSamples > 0) {
+    // Crossfade lead-in silence into first beep to soften first transient.
+    final leadAndFirst = crossfade(pcmLead, pcm1);
+    final seg1 = BytesBuilder()
+      ..add(leadAndFirst)
+      ..add(pcmSil1);
+    final seg1Bytes = seg1.toBytes();
+    final seg12 = crossfade(seg1Bytes, pcm2Soft);
+    final seg12s = BytesBuilder()
+      ..add(seg12)
+      ..add(pcmSil2);
+    final seg12sBytes = seg12s.toBytes();
+    final segAll = crossfade(seg12sBytes, pcm3Soft);
+    content.add(segAll);
+  } else {
+    content.add(pcmLead);
+    content.add(pcm1);
+    content.add(pcmSil1);
+    content.add(pcm2);
+    content.add(pcmSil2);
+    content.add(pcm3);
+  }
+  content.add(pcmGap);
+
+  final body = content.toBytes();
+  final subchunk2Size = body.length;
   final chunkSize = 36 + subchunk2Size;
 
   final out = BytesBuilder();
@@ -303,14 +406,7 @@ Uint8List _buildCycleWav({
   writeU16(16);
   writeString('data');
   writeU32(subchunk2Size);
-
-  out.add(pcmLead);
-  out.add(pcm1);
-  out.add(pcmSil1);
-  out.add(pcm2);
-  out.add(pcmSil2);
-  out.add(pcm3);
-  out.add(pcmGap);
+  out.add(body);
 
   return out.toBytes();
 }
@@ -347,6 +443,47 @@ Uint8List _applyMicroFadeToWav({
     final out = (s * gain).round().clamp(-32768, 32767);
     pcm.setInt16(i * 2, out, Endian.little);
   }
+  // Force exact zero at the first and last samples to avoid residual steps.
+  if (totalSamples > 0) {
+    pcm.setInt16(0, 0, Endian.little);
+    pcm.setInt16((totalSamples - 1) * 2, 0, Endian.little);
+  }
+  final out = BytesBuilder();
+  out.add(header);
+  out.add(wav.sublist(44));
+  return out.toBytes();
+}
+
+Uint8List _removeDcAndNormalize({
+  required Uint8List wav,
+  double targetPeak = 0.98,
+}) {
+  if (wav.length < 44) return wav;
+  final header = wav.sublist(0, 44);
+  final pcm = wav.sublist(44).buffer.asByteData();
+  final totalSamples = pcm.lengthInBytes ~/ 2;
+  if (totalSamples == 0) return wav;
+
+  // Compute DC offset and max abs
+  double sum = 0;
+  double maxAbs = 0;
+  for (int i = 0; i < totalSamples; i++) {
+    final s = pcm.getInt16(i * 2, Endian.little).toDouble();
+    sum += s;
+    final a = s.abs();
+    if (a > maxAbs) maxAbs = a;
+  }
+  final dc = sum / totalSamples;
+  final gain = maxAbs == 0 ? 1.0 : (targetPeak * 32767.0) / maxAbs;
+
+  for (int i = 0; i < totalSamples; i++) {
+    final s = pcm.getInt16(i * 2, Endian.little).toDouble();
+    int out = ((s - dc) * gain).round();
+    if (out < -32768) out = -32768;
+    if (out > 32767) out = 32767;
+    pcm.setInt16(i * 2, out, Endian.little);
+  }
+
   final out = BytesBuilder();
   out.add(header);
   out.add(wav.sublist(44));
