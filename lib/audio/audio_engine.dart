@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +13,7 @@ class AudioEngine {
   bool _isPlaying = false;
   double _volume = 1.0;
   Duration _gapBetweenCycles = const Duration(seconds: 2);
+  bool _didInitialRamp = false;
 
   StreamSubscription<void>? _onCompleteSub;
 
@@ -111,8 +113,12 @@ class AudioEngine {
     }
 
     await _disposePlayer();
+    // Warm up hardware on a separate short-lived player to avoid iOS AVPlayer issues.
+    await _primeHardware();
+
     _player = ap.AudioPlayer();
-    await _player!.setVolume(_volume);
+    // Start at near-silent volume to avoid an initial click, then ramp up.
+    await _player!.setVolume(_didInitialRamp ? _volume : 0.0);
     await _player!.setReleaseMode(ap.ReleaseMode.stop);
 
     await _applySource();
@@ -151,11 +157,18 @@ class AudioEngine {
     });
 
     try {
+      // Prime iOS/Android audio output path with a short silent buffer to avoid
+      // hardware activation pops before the first real tone.
+      await _primeHardware();
       if (_currentAssetPath != null) {
         await _player!.play(ap.AssetSource(_currentAssetPath!));
       }
       _isPlaying = true;
       debugPrint('[AudioEngine] started playback');
+      // Apply a short one-time volume ramp to remove any first-onset click.
+      if (!_didInitialRamp) {
+        unawaited(_rampIn(Duration(milliseconds: 30)));
+      }
     } catch (e) {
       debugPrint('[AudioEngine] play() failed: $e');
       _isPlaying = false;
@@ -196,6 +209,87 @@ class AudioEngine {
     _currentAssetPath = primary;
     debugPrint('[AudioEngine] using asset $_currentAssetPath');
     // No need to pre-load; play() with AssetSource will handle it
+  }
+
+  Future<void> _primeHardware() async {
+    // 80 ms of 44.1 kHz mono 16-bit silence wrapped in a minimal WAV header.
+    final bytes = _buildSilentWavBytes(milliseconds: 80, sampleRate: 44100);
+    final ap.AudioPlayer p = ap.AudioPlayer();
+    try {
+      await p.setReleaseMode(ap.ReleaseMode.stop);
+      await p.setVolume(0.0);
+      await p.play(ap.BytesSource(bytes, mimeType: 'audio/wav'));
+      await Future.delayed(const Duration(milliseconds: 90));
+      await p.stop();
+    } catch (_) {
+      // Best-effort warmup.
+    } finally {
+      try {
+        await p.release();
+      } catch (_) {}
+      try {
+        await p.dispose();
+      } catch (_) {}
+    }
+  }
+
+  Uint8List _buildSilentWavBytes({
+    required int milliseconds,
+    required int sampleRate,
+  }) {
+    final int numSamples = ((milliseconds * sampleRate) / 1000).round();
+    final int subchunk2Size = numSamples * 2; // mono 16-bit
+    final int chunkSize = 36 + subchunk2Size;
+    final bytes = BytesBuilder();
+    void writeString(String s) => bytes.add(s.codeUnits);
+    void writeU32(int v) => bytes.add(
+      Uint8List(4)..buffer.asByteData().setUint32(0, v, Endian.little),
+    );
+    void writeU16(int v) => bytes.add(
+      Uint8List(2)..buffer.asByteData().setUint16(0, v, Endian.little),
+    );
+    writeString('RIFF');
+    writeU32(chunkSize);
+    writeString('WAVE');
+    writeString('fmt ');
+    writeU32(16);
+    writeU16(1); // PCM
+    writeU16(1); // mono
+    writeU32(sampleRate);
+    writeU32(sampleRate * 2); // byte rate
+    writeU16(2); // block align
+    writeU16(16); // bits per sample
+    writeString('data');
+    writeU32(subchunk2Size);
+    // Append silent PCM
+    bytes.add(Uint8List(subchunk2Size));
+    return bytes.toBytes();
+  }
+
+  Future<void> _rampIn(Duration duration) async {
+    if (_player == null || _didInitialRamp) return;
+    final ap.AudioPlayer player = _player!;
+    final int steps = duration.inMilliseconds.clamp(6, 30);
+    final double startVol = 0.0;
+    final double targetVol = _volume.clamp(0.0, 1.0);
+    final Duration stepDelay = Duration(
+      milliseconds: (duration.inMilliseconds / steps).ceil(),
+    );
+    try {
+      await player.setVolume(startVol);
+      for (int i = 1; i <= steps; i++) {
+        if (!_isPlaying || _player != player) return;
+        final double v = startVol + (targetVol - startVol) * (i / steps);
+        await player.setVolume(v);
+        await Future.delayed(stepDelay);
+      }
+      if (_isPlaying && _player == player) {
+        await player.setVolume(targetVol);
+      }
+      _didInitialRamp = true;
+    } catch (_) {
+      // Best-effort; ignore errors during ramp.
+    }
   }
 
   Future<void> _disposePlayer() async {

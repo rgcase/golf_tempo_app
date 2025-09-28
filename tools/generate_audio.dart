@@ -32,7 +32,7 @@ Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
   ];
 
   const int sampleRate = 44100;
-  const int leadInMs = 15; // Prepend silence so first hit isn't at t=0
+  const int leadInMs = 15; // Default lead-in so first hit isn't at t=0
   const int defaultBlipMs = 60; // for synthesized tones; samples may differ
   final int blipSamples = (defaultBlipMs * sampleRate / 1000).round();
 
@@ -164,19 +164,41 @@ Future<void> _generateAllCycleSets(Directory cyclesRoot) async {
       final d1 = _wavDurationMs(beeps[0], sampleRate);
       final d2 = _wavDurationMs(beeps[1], sampleRate);
 
-      final silence1Ms = (t1Ms - d1 - leadInMs).clamp(0, 1 << 31);
+      // Use a larger compensated pre-roll for piano to avoid first-click.
+      final int setLeadInMs = setName == 'piano' ? 50 : leadInMs;
+      final silence1Ms = (t1Ms - d1 - setLeadInMs).clamp(0, 1 << 31);
       final silence2Ms = (totalMs - t1Ms - d2).clamp(0, 1 << 31);
+
+      final crossfadeMs = setName == 'piano' ? 40 : 0;
+      final firstOnsetAdjustMs = setName == 'piano' ? -10 : 0; // tighten Δ12
+      // Compute desired deltas
+      final desired12 = t1Ms;
+      final desired23 = totalMs - t1Ms;
+      // Solve for silences allowing negative s2 which we convert to extra overlap.
+      int s1Calc =
+          (desired12 + firstOnsetAdjustMs + crossfadeMs - d1 - setLeadInMs);
+      if (s1Calc < 0) s1Calc = 0; // avoid pre-first-beep overlap
+      final s2Raw = (desired23 + crossfadeMs - d2);
+      int extraOverlap3Ms = 0;
+      int s2Calc = s2Raw;
+      if (s2Calc < 0) {
+        extraOverlap3Ms = -s2Calc;
+        s2Calc = 0;
+      }
 
       final wav = _buildCycleWav(
         sampleRate: sampleRate,
-        leadInMs: leadInMs,
+        leadInMs: setLeadInMs,
         beep1: beeps[0],
         beep2: beeps[1],
         beep3: beeps[2],
-        silence1Ms: silence1Ms as int,
-        silence2Ms: silence2Ms as int,
+        silence1Ms: s1Calc,
+        silence2Ms: s2Calc,
         trailingGapMs: 10,
-        crossfadeMs: setName == 'piano' ? 40 : 0,
+        crossfadeMs: crossfadeMs,
+        extraOverlapAfterBeep2Ms: extraOverlap3Ms,
+        leadCrossfadeMs: setName == 'piano' ? 40 : crossfadeMs,
+        globalFadeInMs: setName == 'piano' ? 4 : 0,
       );
       File(path).writeAsBytesSync(wav, flush: true);
       stdout.writeln('Wrote $path');
@@ -278,6 +300,9 @@ Uint8List _buildCycleWav({
   required int silence2Ms,
   required int trailingGapMs,
   int crossfadeMs = 0,
+  int extraOverlapAfterBeep2Ms = 0,
+  int leadCrossfadeMs = -1,
+  int globalFadeInMs = 0,
 }) {
   Uint8List pcmFromWav(Uint8List wav) => wav.sublist(44);
   Uint8List silencePcm(int ms) {
@@ -289,6 +314,11 @@ Uint8List _buildCycleWav({
   final pcm2 = pcmFromWav(beep2);
   final pcm3 = pcmFromWav(beep3);
   final cfSamples = (crossfadeMs * sampleRate / 1000).round();
+  final leadCfSamples =
+      ((leadCrossfadeMs >= 0 ? leadCrossfadeMs : crossfadeMs) *
+              sampleRate /
+              1000)
+          .round();
 
   // Soften the attack of the 2nd and 3rd hits inside the assembled cycle
   // to avoid residual clicks right before they start.
@@ -309,8 +339,8 @@ Uint8List _buildCycleWav({
   final pcm2Soft = _attackSoften(pcm2, 10);
   final pcm3Soft = _attackSoften(pcm3, 10);
 
-  Uint8List crossfade(Uint8List a, Uint8List b) {
-    if (cfSamples <= 0) {
+  Uint8List crossfadeN(Uint8List a, Uint8List b, int nSamples) {
+    if (nSamples <= 0) {
       final out = BytesBuilder();
       out.add(a);
       out.add(b);
@@ -318,9 +348,9 @@ Uint8List _buildCycleWav({
     }
     final aSamples = a.length ~/ 2;
     final bSamples = b.length ~/ 2;
-    final n = aSamples < cfSamples || bSamples < cfSamples
+    final n = aSamples < nSamples || bSamples < nSamples
         ? (aSamples < bSamples ? aSamples : bSamples)
-        : cfSamples;
+        : nSamples;
     final out = BytesBuilder();
     // a without its last n samples
     out.add(a.sublist(0, (aSamples - n) * 2));
@@ -351,6 +381,8 @@ Uint8List _buildCycleWav({
     return out.toBytes();
   }
 
+  Uint8List crossfade(Uint8List a, Uint8List b) => crossfadeN(a, b, cfSamples);
+
   final pcmLead = silencePcm(leadInMs);
   final pcmSil1 = silencePcm(silence1Ms);
   final pcmSil2 = silencePcm(silence2Ms);
@@ -359,8 +391,8 @@ Uint8List _buildCycleWav({
   // Build dynamic PCM content with optional crossfades, then write header.
   final content = BytesBuilder();
   if (cfSamples > 0) {
-    // Crossfade lead-in silence into first beep to soften first transient.
-    final leadAndFirst = crossfade(pcmLead, pcm1);
+    // Crossfade lead-in into first beep with potentially smaller/zero crossfade.
+    final leadAndFirst = crossfadeN(pcmLead, pcm1, leadCfSamples);
     final seg1 = BytesBuilder()
       ..add(leadAndFirst)
       ..add(pcmSil1);
@@ -369,7 +401,18 @@ Uint8List _buildCycleWav({
     final seg12s = BytesBuilder()
       ..add(seg12)
       ..add(pcmSil2);
-    final seg12sBytes = seg12s.toBytes();
+    var seg12sBytes = seg12s.toBytes();
+    // If we need the third onset earlier than the second sample tail allows,
+    // trim tail of seg12s before crossfading into pcm3.
+    if (extraOverlapAfterBeep2Ms > 0) {
+      final trimSamples = (extraOverlapAfterBeep2Ms * sampleRate / 1000)
+          .round();
+      final trimBytes = (trimSamples * 2).clamp(0, seg12sBytes.length);
+      final keep = seg12sBytes.length - trimBytes;
+      if (keep > 0) {
+        seg12sBytes = seg12sBytes.sublist(0, keep);
+      }
+    }
     final segAll = crossfade(seg12sBytes, pcm3Soft);
     content.add(segAll);
   } else {
@@ -383,6 +426,27 @@ Uint8List _buildCycleWav({
   content.add(pcmGap);
 
   final body = content.toBytes();
+  // Apply an optional short global fade-in to the assembled PCM to soften the very first onset.
+  if (globalFadeInMs > 0 && body.isNotEmpty) {
+    final bd = ByteData.sublistView(body);
+    final fadeSamples = (globalFadeInMs * sampleRate / 1000).round();
+    final limit = math.min(fadeSamples, body.length ~/ 2);
+    for (int i = 0; i < limit; i++) {
+      final s = bd.getInt16(i * 2, Endian.little).toDouble();
+      final t = i / (limit == 0 ? 1 : limit);
+      final w = t; // linear fade-in
+      final v = (s * w).round().clamp(-32768, 32767) as int;
+      bd.setInt16(i * 2, v, Endian.little);
+    }
+  }
+  // Force start/end samples to exact zero to eliminate any DC step at boundaries.
+  if (body.isNotEmpty) {
+    final bd = ByteData.sublistView(body);
+    bd.setInt16(0, 0, Endian.little);
+    if (body.length >= 2) {
+      bd.setInt16(body.length - 2, 0, Endian.little);
+    }
+  }
   final subchunk2Size = body.length;
   final chunkSize = 36 + subchunk2Size;
 
