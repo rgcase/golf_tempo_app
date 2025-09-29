@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
 import 'package:duration/duration.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../audio/audio_engine.dart';
@@ -32,6 +33,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Duration _gap = const Duration(seconds: 2);
   SoundSet _soundSet = SoundSet.tones;
   bool _adsRemoved = false;
+  ProductDetails? _removeAdsProduct;
+  bool _iapReady = false;
 
   // Frame presets
   final List<SwingSpeed> _threeToOnePresets = const <SwingSpeed>[
@@ -111,13 +114,25 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _initIap() async {
     await _iap.init();
     if (!mounted) return;
-    setState(() {
-      _adsRemoved = _iap.adsRemoved;
-    });
+    try {
+      final product = await _iap.loadRemoveAdsProduct();
+      if (!mounted) return;
+      setState(() {
+        _adsRemoved = _iap.adsRemoved;
+        _removeAdsProduct = product;
+        _iapReady = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _adsRemoved = _iap.adsRemoved;
+        _iapReady = true;
+      });
+    }
   }
 
   Future<void> _showRemoveAdsDialog() async {
-    final product = await _iap.loadRemoveAdsProduct();
+    final product = _removeAdsProduct ?? await _iap.loadRemoveAdsProduct();
     if (!mounted) return;
     await showDialog<void>(
       context: context,

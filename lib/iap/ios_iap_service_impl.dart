@@ -47,11 +47,12 @@ class IosIapServiceImpl implements IapService {
       }
       return null;
     }
-    return resp.productDetails.firstWhere(
-      (p) => p.id == productIdRemoveAds,
-      orElse: () =>
-          (resp.productDetails.isEmpty ? null : resp.productDetails.first)!,
-    );
+    if (resp.productDetails.isEmpty) return null;
+    for (final p in resp.productDetails) {
+      if (p.id == productIdRemoveAds) return p;
+    }
+    // Fallback: return first product if exact ID not found
+    return resp.productDetails.first;
   }
 
   @override
@@ -105,4 +106,3 @@ class IosIapServiceImpl implements IapService {
     }
   }
 }
-
