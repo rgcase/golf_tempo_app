@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'ui/home_screen.dart';
 import 'consent/consent_manager.dart';
+
+ThemeMode _parseThemeModeOverride(String raw) {
+  final s = raw.trim().toLowerCase();
+  if (s.isEmpty) return ThemeMode.system;
+  if (s == 'dark' || s == 'true' || s == '1') return ThemeMode.dark;
+  if (s == 'light' || s == 'false' || s == '0') return ThemeMode.light;
+  if (s == 'system') return ThemeMode.system;
+  return ThemeMode.system;
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,12 +37,25 @@ class GolfTempoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lightScheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF2E7D32),
+    );
+    final darkScheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF2E7D32),
+      brightness: Brightness.dark,
+    );
+    const themeOverrideRaw = String.fromEnvironment('THEME_MODE_OVERRIDE');
+    final mode = _parseThemeModeOverride(themeOverrideRaw);
+    if (kDebugMode && themeOverrideRaw.isNotEmpty) {
+      debugPrint(
+        'Theme override: THEME_MODE_OVERRIDE=$themeOverrideRaw -> $mode',
+      );
+    }
     return MaterialApp(
       title: 'SwingGroove Golf',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
-        useMaterial3: true,
-      ),
+      theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
+      darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
+      themeMode: mode,
       home: const HomeScreen(),
     );
   }

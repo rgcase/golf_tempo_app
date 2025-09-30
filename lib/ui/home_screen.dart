@@ -34,7 +34,6 @@ class _HomeScreenState extends State<HomeScreen> {
   SoundSet _soundSet = SoundSet.tones;
   bool _adsRemoved = false;
   ProductDetails? _removeAdsProduct;
-  bool _iapReady = false;
 
   // Frame presets
   final List<SwingSpeed> _threeToOnePresets = const <SwingSpeed>[
@@ -65,6 +64,87 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadPrefs();
     _initVolumeListener();
     _initIap();
+  }
+
+  Widget _tempoSegmented(List<SwingSpeed> presets) {
+    final segments = presets
+        .map(
+          (p) => ButtonSegment<SwingSpeed>(
+            value: p,
+            label: Text(
+              '${p.backswing}:${p.downswing}',
+              maxLines: 1,
+              softWrap: false,
+            ),
+          ),
+        )
+        .toList(growable: false);
+    return SegmentedButton<SwingSpeed>(
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: MaterialStateProperty.all(
+          const EdgeInsets.symmetric(horizontal: 8),
+        ),
+        textStyle: MaterialStateProperty.all(const TextStyle(fontSize: 14)),
+      ),
+      segments: segments,
+      selected: <SwingSpeed>{_selectedPreset},
+      onSelectionChanged: (s) async {
+        final p = s.first;
+        setState(() {
+          _selectedPreset = p;
+          if (_ratio == TempoRatio.threeToOne) {
+            _selectedThreeToOne = p;
+          } else {
+            _selectedTwoToOne = p;
+          }
+        });
+        _savePrefs();
+        if (_isPlaying) {
+          final cfg = _configForSelection();
+          await _engine.queueTempoChange(
+            backswingUnits: cfg.backswingUnits,
+            downswingUnits: cfg.downswingUnits,
+          );
+        }
+      },
+    );
+  }
+
+  Widget _gapSegmented() {
+    final options = const [
+      Duration(seconds: 2),
+      Duration(seconds: 5),
+      Duration(seconds: 15),
+      Duration(seconds: 30),
+    ];
+    final segments = options
+        .map(
+          (d) => ButtonSegment<Duration>(
+            value: d,
+            label: Text(prettyDuration(d, abbreviated: true, spacer: '')),
+          ),
+        )
+        .toList(growable: false);
+    return SegmentedButton<Duration>(
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: MaterialStateProperty.all(
+          const EdgeInsets.symmetric(horizontal: 8),
+        ),
+        textStyle: MaterialStateProperty.all(const TextStyle(fontSize: 14)),
+      ),
+      segments: segments,
+      selected: <Duration>{_gap},
+      onSelectionChanged: (s) {
+        final d = s.first;
+        setState(() => _gap = d);
+        _engine.setGap(d);
+        _savePrefs();
+      },
+    );
   }
 
   Future<void> _initVolumeListener() async {
@@ -120,13 +200,11 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _adsRemoved = _iap.adsRemoved;
         _removeAdsProduct = product;
-        _iapReady = true;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _adsRemoved = _iap.adsRemoved;
-        _iapReady = true;
       });
     }
   }
@@ -302,196 +380,202 @@ class _HomeScreenState extends State<HomeScreen> {
         ? _threeToOnePresets
         : _twoToOnePresets;
     return Scaffold(
-      appBar: AppBar(title: const Text('SwingGroove Golf')),
+      appBar: AppBar(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('logo.png', height: 22),
+            const SizedBox(width: 8),
+            const Text('SwingGroove Golf'),
+          ],
+        ),
+        centerTitle: true,
+      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('3:1 Full Swing'),
-                      selected: _ratio == TempoRatio.threeToOne,
-                      onSelected: (_) {
-                        setState(() {
-                          _ratio = TempoRatio.threeToOne;
-                          _selectedPreset = _selectedThreeToOne;
-                        });
-                        _savePrefs();
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    ChoiceChip(
-                      label: const Text('2:1 Short/Putting'),
-                      selected: _ratio == TempoRatio.twoToOne,
-                      onSelected: (_) {
-                        setState(() {
-                          _ratio = TempoRatio.twoToOne;
-                          _selectedPreset = _selectedTwoToOne;
-                        });
-                        _savePrefs();
-                      },
-                    ),
-                  ],
-                ),
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _sectionCard(title: 'Mode', child: _ratioSegmented()),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _sectionCard(
+                title: 'Tempo',
+                child: _tempoSegmented(presets),
               ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text('Tempo'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [for (final p in presets) _tempoChip(p)],
-                    ),
-                  ],
-                ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _sectionCard(title: 'Sound', child: _soundSegmented()),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _sectionCard(
+                title: 'Interval between cycles',
+                child: _gapSegmented(),
               ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text('Sound'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        _soundChip(SoundSet.tones, 'Tones'),
-                        _soundChip(SoundSet.woodblock, 'Woodblock'),
-                        _soundChip(SoundSet.piano, 'Piano'),
-                        // Golf removed
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text('Interval between cycles'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        _gapChip(const Duration(seconds: 2)),
-                        _gapChip(const Duration(seconds: 5)),
-                        _gapChip(const Duration(seconds: 15)),
-                        _gapChip(const Duration(seconds: 30)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Ratio: ${_ratio == TempoRatio.threeToOne ? '3:1' : '2:1'}  •  ${_selectedPreset.backswing}:${_selectedPreset.downswing}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        shape: const StadiumBorder(),
+                        elevation: 2,
+                      ),
                       icon: Icon(_isPlaying ? Icons.stop : Icons.play_arrow),
                       label: Text(_isPlaying ? 'Stop' : 'Start'),
                       onPressed: () {
                         _isPlaying ? _stop() : _start();
                       },
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'System volume is muted. Increase volume to hear tones.',
-                      style: TextStyle(
-                        color: _systemVolume == 0.0 ? Colors.red : Colors.white,
+                  ),
+                  const SizedBox(height: 6),
+                  if (_systemVolume == 0.0) _inlineVolumeWarning(context),
+                  if (!kReleaseMode ||
+                      const bool.fromEnvironment(
+                        'FORCE_TEST_ADS',
+                        defaultValue: false,
+                      ))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: OutlinedButton(
+                        onPressed: _openAdInspector,
+                        child: const Text('Open Ad Inspector'),
                       ),
                     ),
-                    if (!kReleaseMode ||
-                        const bool.fromEnvironment(
-                          'FORCE_TEST_ADS',
-                          defaultValue: false,
-                        ))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: OutlinedButton(
-                          onPressed: _openAdInspector,
-                          child: const Text('Open Ad Inspector'),
-                        ),
-                      ),
-                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Ad banner and support link (hidden if purchased)
+            if (!_adsRemoved) ...[
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.only(top: 6.0),
+                child: Center(
+                  child: BannerAdWidget(adUnitId: _bannerAdUnitId()),
                 ),
               ),
-              const SizedBox(height: 16),
-              // Ad banner and support link (hidden if purchased)
-              if (!_adsRemoved) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Center(
-                    child: BannerAdWidget(adUnitId: _bannerAdUnitId()),
-                  ),
+              TextButton.icon(
+                onPressed: _showRemoveAdsDialog,
+                icon: const Icon(Icons.volunteer_activism),
+                label: const Text(
+                  'Support development and remove ads forever?',
                 ),
-                TextButton(
-                  onPressed: _showRemoveAdsDialog,
-                  child: const Text(
-                    'Support development and remove ads forever?',
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ] else ...[
-                const Padding(
-                  padding: EdgeInsets.only(top: 8.0),
-                  child: Text('Thanks for supporting! Ads are disabled.'),
-                ),
-                const SizedBox(height: 16),
-              ],
+              ),
+              const SizedBox(height: 8),
+            ] else ...[
+              const Padding(
+                padding: EdgeInsets.only(top: 8.0),
+                child: Text('Thanks for supporting! Ads are disabled.'),
+              ),
+              const SizedBox(height: 8),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _gapChip(Duration d) {
-    final selected = _gap == d;
-    return ChoiceChip(
-      label: Text(prettyDuration(d, abbreviated: true, spacer: '')),
-      selected: selected,
-      onSelected: (_) {
-        setState(() => _gap = d);
-        _engine.setGap(d);
+  Widget _sectionCard({required String title, required Widget child}) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _sectionIconFor(title),
+                const SizedBox(width: 6),
+                Text(title, style: theme.textTheme.labelLarge),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Align(alignment: Alignment.center, child: child),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionIconFor(String title) {
+    switch (title) {
+      case 'Mode':
+        return const Icon(Icons.golf_course, size: 18);
+      case 'Tempo':
+        return const Icon(Icons.speed, size: 18);
+      case 'Sound':
+        return const Icon(Icons.music_note, size: 18);
+      case 'Interval between cycles':
+        return const Icon(Icons.timer, size: 18);
+      default:
+        return const Icon(Icons.tune, size: 18);
+    }
+  }
+
+  Widget _ratioSegmented() {
+    return SegmentedButton<TempoRatio>(
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      segments: const [
+        ButtonSegment(
+          value: TempoRatio.threeToOne,
+          label: Text('3:1 Full Swing'),
+        ),
+        ButtonSegment(
+          value: TempoRatio.twoToOne,
+          label: Text('2:1 Short/Putting'),
+        ),
+      ],
+      selected: <TempoRatio>{_ratio},
+      onSelectionChanged: (s) {
+        final sel = s.first;
+        setState(() {
+          _ratio = sel;
+          _selectedPreset = sel == TempoRatio.threeToOne
+              ? _selectedThreeToOne
+              : _selectedTwoToOne;
+        });
         _savePrefs();
       },
     );
   }
 
-  Widget _soundChip(SoundSet set, String label) {
-    final selected = _soundSet == set;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) async {
-        setState(() => _soundSet = set);
+  Widget _soundSegmented() {
+    return SegmentedButton<SoundSet>(
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      segments: const [
+        ButtonSegment(value: SoundSet.tones, label: Text('Tones')),
+        ButtonSegment(value: SoundSet.woodblock, label: Text('Woodblock')),
+        ButtonSegment(value: SoundSet.piano, label: Text('Piano')),
+      ],
+      selected: <SoundSet>{_soundSet},
+      onSelectionChanged: (s) async {
+        final sel = s.first;
+        setState(() => _soundSet = sel);
         _savePrefs();
-        final key = _toSetKey(set);
+        final key = _toSetKey(sel);
         if (_isPlaying) {
           await _engine.queueSoundSetChange(key);
         } else {
@@ -501,33 +585,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _tempoChip(SwingSpeed p) {
-    final selected =
-        _selectedPreset.backswing == p.backswing &&
-        _selectedPreset.downswing == p.downswing;
-    return ChoiceChip(
-      label: Text('${p.backswing}:${p.downswing}'),
-      selected: selected,
-      onSelected: (_) async {
-        setState(() {
-          _selectedPreset = p;
-          if (_ratio == TempoRatio.threeToOne) {
-            _selectedThreeToOne = p;
-          } else {
-            _selectedTwoToOne = p;
-          }
-        });
-        _savePrefs();
-
-        // If currently playing, queue change for next cycle
-        if (_isPlaying) {
-          final cfg = _configForSelection();
-          await _engine.queueTempoChange(
-            backswingUnits: cfg.backswingUnits,
-            downswingUnits: cfg.downswingUnits,
-          );
-        }
-      },
+  Widget _inlineVolumeWarning(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.errorContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.volume_off, size: 18),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'System volume is muted. Increase volume to hear tones.',
+            ),
+          ),
+        ],
+      ),
     );
   }
+
+  // _gapChip removed in favor of segmented control.
+
+  // _soundChip removed in favor of segmented control.
+
+  // _tempoChip removed in favor of segmented control.
 }

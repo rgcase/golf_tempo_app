@@ -77,6 +77,7 @@ flutter:
     - assets/audio/cycles/piano/
     - assets/audio/cycles/tones/
     - assets/audio/cycles/woodblock/
+    - logo.png
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
