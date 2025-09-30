@@ -6,6 +6,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'iap_service.dart';
 
+// Build-time override for the ads-removed state. When provided via
+// --dart-define=ADS_REMOVED_OVERRIDE=true|false this value will be respected
+// unconditionally by the IAP service adsRemoved getter.
+const String _kAdsRemovedOverrideRaw = String.fromEnvironment(
+  'ADS_REMOVED_OVERRIDE',
+);
+
+bool? _parseOverrideBool(String raw) {
+  final s = raw.trim().toLowerCase();
+  if (s.isEmpty) return null;
+  if (s == 'true' || s == '1' || s == 'yes') return true;
+  if (s == 'false' || s == '0' || s == 'no') return false;
+  return null;
+}
+
+bool? _forcedAdsRemoved() {
+  if (_kAdsRemovedOverrideRaw.isEmpty) return null;
+  return _parseOverrideBool(_kAdsRemovedOverrideRaw);
+}
+
 class IosIapServiceImpl implements IapService {
   static const String productIdRemoveAds = 'dev.golfapp.swinggroove.remove_ads';
   static const String prefsKeyAdsRemoved = 'ads_removed';
@@ -17,13 +37,22 @@ class IosIapServiceImpl implements IapService {
   bool _adsRemoved = false;
 
   @override
-  bool get adsRemoved => _adsRemoved;
+  bool get adsRemoved {
+    final forced = _forcedAdsRemoved();
+    if (forced != null) return forced;
+    return _adsRemoved;
+  }
 
   @override
   Future<void> init() async {
     _available = await _iap.isAvailable();
     final prefs = await SharedPreferences.getInstance();
     _adsRemoved = prefs.getBool(prefsKeyAdsRemoved) ?? false;
+
+    final forced = _forcedAdsRemoved();
+    if (forced != null && kDebugMode) {
+      debugPrint('IAP: ADS_REMOVED_OVERRIDE=$forced (forcing adsRemoved)');
+    }
 
     _sub = _iap.purchaseStream.listen(
       _onPurchases,
