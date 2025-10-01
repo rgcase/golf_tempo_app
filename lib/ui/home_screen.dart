@@ -9,6 +9,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import '../audio/audio_engine.dart';
 import '../state/tempo_models.dart';
 import '../ads/banner_ad_widget.dart';
@@ -659,6 +660,15 @@ class _AboutScreen extends StatelessWidget {
                 leading: const Icon(Icons.apps),
                 title: const Text('SwingGroove Golf'),
                 subtitle: Text('Version $version'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.link),
+                title: const Text('Source code on GitHub'),
+                subtitle: const Text('github.com/rgcase/golf_tempo_app'),
+                onTap: () => launchUrlString(
+                  'https://github.com/rgcase/golf_tempo_app',
+                  mode: LaunchMode.externalApplication,
+                ),
               ),
               const SizedBox(height: 8),
               ListTile(
