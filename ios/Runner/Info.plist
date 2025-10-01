@@ -248,5 +248,7 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>This app plays training tones and does not record audio. The microphone is not used.</string>
 	</dict>
 </plist>

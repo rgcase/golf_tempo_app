@@ -553,7 +553,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         ButtonSegment(
           value: TempoRatio.twoToOne,
-          label: Text('2:1 Short/Putting'),
+          label: Text('2:1 Short Game/Putting'),
         ),
       ],
       selected: <TempoRatio>{_ratio},
@@ -667,6 +667,17 @@ class _AboutScreen extends StatelessWidget {
                 subtitle: const Text('github.com/rgcase/golf_tempo_app'),
                 onTap: () => launchUrlString(
                   'https://github.com/rgcase/golf_tempo_app',
+                  mode: LaunchMode.externalApplication,
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: const Text('Privacy Policy'),
+                subtitle: const Text(
+                  'github.com/rgcase/golf_tempo_app/PRIVACY.md',
+                ),
+                onTap: () => launchUrlString(
+                  'https://github.com/rgcase/golf_tempo_app/blob/main/PRIVACY.md',
                   mode: LaunchMode.externalApplication,
                 ),
               ),
