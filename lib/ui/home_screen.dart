@@ -6,6 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:package_info_plus/package_info_plus.dart';
 import '../audio/audio_engine.dart';
 import '../state/tempo_models.dart';
 import '../ads/banner_ad_widget.dart';
@@ -381,6 +384,13 @@ class _HomeScreenState extends State<HomeScreen> {
         : _twoToOnePresets;
     return Scaffold(
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'About',
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => _openAbout(context),
+          ),
+        ],
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
@@ -609,9 +619,109 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openAbout(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const _AboutScreen()));
+  }
+
   // _gapChip removed in favor of segmented control.
 
   // _soundChip removed in favor of segmented control.
 
   // _tempoChip removed in favor of segmented control.
+}
+
+class _AboutScreen extends StatelessWidget {
+  const _AboutScreen();
+
+  Future<String> _getVersion() async {
+    try {
+      final pkg = await PackageInfo.fromPlatform();
+      return '${pkg.version}+${pkg.buildNumber}';
+    } catch (_) {
+      return 'Unknown';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('About')),
+      body: FutureBuilder<String>(
+        future: _getVersion(),
+        builder: (context, snapshot) {
+          final version = snapshot.data ?? '';
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              ListTile(
+                leading: const Icon(Icons.apps),
+                title: const Text('SwingGroove Golf'),
+                subtitle: Text('Version $version'),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('Open-source licenses'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const _LicensesListPage()),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LicensesListPage extends StatelessWidget {
+  const _LicensesListPage();
+
+  Future<List<dynamic>> _loadLicenses() async {
+    try {
+      final jsonStr = await rootBundle.loadString('assets/oss_licenses.json');
+      final data = jsonDecode(jsonStr) as List<dynamic>;
+      return data;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Licenses')),
+      body: FutureBuilder<List<dynamic>>(
+        future: _loadLicenses(),
+        builder: (context, snapshot) {
+          final licenses = snapshot.data ?? const [];
+          if (licenses.isEmpty) {
+            return const Center(child: Text('No license data found.'));
+          }
+          return ListView.separated(
+            itemCount: licenses.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final item = licenses[index] as Map<String, dynamic>;
+              final name = item['name'] as String? ?? '';
+              final license = item['license'] as String? ?? '';
+              final version = item['version'] as String? ?? '';
+              return ExpansionTile(
+                title: Text(name),
+                subtitle: Text(version),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: SelectableText(license),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
 }
