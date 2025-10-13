@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'ui/home_screen.dart';
 import 'consent/consent_manager.dart';
 
@@ -17,6 +18,8 @@ ThemeMode _parseThemeModeOverride(String raw) {
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // Required for StoreKit purchases to succeed on iOS.
+  InAppPurchase.instance.enablePendingPurchases();
   // Request UMP consent (best-effort) before initializing ads.
   final consent = ConsentManager();
   // Fire and forget; do not block app startup excessively.
