@@ -6,6 +6,13 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'ui/home_screen.dart';
 import 'consent/consent_manager.dart';
 
+// Compile-time switch to enable a clean UI for screenshots on simulators/devices.
+// Use: flutter run --dart-define=SCREENSHOT_MODE=true
+const bool _kScreenshotMode = bool.fromEnvironment(
+  'SCREENSHOT_MODE',
+  defaultValue: false,
+);
+
 ThemeMode _parseThemeModeOverride(String raw) {
   final s = raw.trim().toLowerCase();
   if (s.isEmpty) return ThemeMode.system;
@@ -20,6 +27,10 @@ void main() {
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   // Required for StoreKit purchases to succeed on iOS.
   InAppPurchase.instance.enablePendingPurchases();
+  // Hide iOS status bar when taking clean screenshots.
+  if (_kScreenshotMode) {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
+  }
   // Request UMP consent (best-effort) before initializing ads.
   final consent = ConsentManager();
   // Fire and forget; do not block app startup excessively.
@@ -59,6 +70,8 @@ class GolfTempoApp extends StatelessWidget {
       theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
       darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
       themeMode: mode,
+      // Hide the top-right "DEBUG" banner when screenshot mode is enabled.
+      debugShowCheckedModeBanner: kDebugMode && !_kScreenshotMode,
       home: const HomeScreen(),
     );
   }

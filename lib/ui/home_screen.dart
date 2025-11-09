@@ -20,6 +20,13 @@ typedef SwingSpeed = ({int backswing, int downswing});
 
 enum SoundSet { tones, woodblock, piano }
 
+// Compile-time switch for hiding debug affordances (e.g., Ad Inspector button)
+// while running in debug/profile on simulator or device.
+const bool kScreenshotMode = bool.fromEnvironment(
+  'SCREENSHOT_MODE',
+  defaultValue: false,
+);
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -455,11 +462,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 6),
                   if (_systemVolume == 0.0) _inlineVolumeWarning(context),
-                  if (!kReleaseMode ||
-                      const bool.fromEnvironment(
-                        'FORCE_TEST_ADS',
-                        defaultValue: false,
-                      ))
+                  if (!kScreenshotMode &&
+                      (!kReleaseMode ||
+                          const bool.fromEnvironment(
+                            'FORCE_TEST_ADS',
+                            defaultValue: false,
+                          )))
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: OutlinedButton(
