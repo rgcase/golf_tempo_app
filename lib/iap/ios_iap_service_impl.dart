@@ -86,6 +86,12 @@ class IosIapServiceImpl implements IapService {
 
   @override
   Future<bool> buyRemoveAds(ProductDetails product) async {
+    if (!_available) {
+      if (kDebugMode) {
+        debugPrint('IAP: Store not available; cannot start purchase.');
+      }
+      return false;
+    }
     final param = PurchaseParam(productDetails: product);
     return _iap.buyNonConsumable(purchaseParam: param);
   }

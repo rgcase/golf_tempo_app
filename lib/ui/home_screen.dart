@@ -45,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   SoundSet _soundSet = SoundSet.tones;
   bool _adsRemoved = false;
   ProductDetails? _removeAdsProduct;
+  bool _purchaseInProgress = false;
 
   // Frame presets
   final List<SwingSpeed> _threeToOnePresets = const <SwingSpeed>[
@@ -251,14 +252,36 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             if (product != null)
               ElevatedButton(
-                onPressed: () async {
-                  await _iap.buyRemoveAds(product);
-                  await Future.delayed(const Duration(milliseconds: 300));
-                  if (!mounted) return;
-                  setState(() => _adsRemoved = _iap.adsRemoved);
-                  if (mounted) Navigator.of(ctx).pop();
-                },
-                child: Text('Buy for ${product.price}'),
+                onPressed: _purchaseInProgress
+                    ? null
+                    : () async {
+                        setState(() => _purchaseInProgress = true);
+                        try {
+                          final started = await _iap.buyRemoveAds(product);
+                          // Give the purchase stream a moment to deliver events.
+                          if (started) {
+                            await Future.delayed(
+                              const Duration(milliseconds: 300),
+                            );
+                          }
+                          if (!mounted) return;
+                          setState(() => _adsRemoved = _iap.adsRemoved);
+                          if (_adsRemoved && mounted) {
+                            Navigator.of(ctx).pop();
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() => _purchaseInProgress = false);
+                          }
+                        }
+                      },
+                child: _purchaseInProgress
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text('Buy for ${product.price}'),
               ),
           ],
         );

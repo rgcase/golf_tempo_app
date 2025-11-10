@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 import 'ui/home_screen.dart';
 import 'consent/consent_manager.dart';
 
@@ -25,8 +24,6 @@ ThemeMode _parseThemeModeOverride(String raw) {
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  // Required for StoreKit purchases to succeed on iOS.
-  InAppPurchase.instance.enablePendingPurchases();
   // Hide iOS status bar when taking clean screenshots.
   if (_kScreenshotMode) {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
