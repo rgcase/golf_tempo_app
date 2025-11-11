@@ -27,6 +27,24 @@ const bool kScreenshotMode = bool.fromEnvironment(
   defaultValue: false,
 );
 
+// Optional compile-time override to force ads removed immediately on first frame.
+const String _kAdsRemovedOverrideRawHome = String.fromEnvironment(
+  'ADS_REMOVED_OVERRIDE',
+);
+
+bool? _parseOverrideBool(String raw) {
+  final s = raw.trim().toLowerCase();
+  if (s.isEmpty) return null;
+  if (s == 'true' || s == '1' || s == 'yes') return true;
+  if (s == 'false' || s == '0' || s == 'no') return false;
+  return null;
+}
+
+bool? _forcedAdsRemovedHome() {
+  if (_kAdsRemovedOverrideRawHome.isEmpty) return null;
+  return _parseOverrideBool(_kAdsRemovedOverrideRawHome);
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -43,7 +61,8 @@ class _HomeScreenState extends State<HomeScreen> {
   TempoRatio _ratio = TempoRatio.threeToOne;
   Duration _gap = const Duration(seconds: 2);
   SoundSet _soundSet = SoundSet.tones;
-  bool _adsRemoved = false;
+  // Default to forced override if provided so we don't build the ad widget at all.
+  bool _adsRemoved = _forcedAdsRemovedHome() ?? false;
   ProductDetails? _removeAdsProduct;
   bool _purchaseInProgress = false;
 

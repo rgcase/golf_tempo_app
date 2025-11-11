@@ -12,6 +12,19 @@ const bool _kScreenshotMode = bool.fromEnvironment(
   defaultValue: false,
 );
 
+// Optional compile-time override to force ads removed in all code paths.
+const String _kAdsRemovedOverrideRaw = String.fromEnvironment(
+  'ADS_REMOVED_OVERRIDE',
+);
+
+bool? _parseOverrideBool(String raw) {
+  final s = raw.trim().toLowerCase();
+  if (s.isEmpty) return null;
+  if (s == 'true' || s == '1' || s == 'yes') return true;
+  if (s == 'false' || s == '0' || s == 'no') return false;
+  return null;
+}
+
 ThemeMode _parseThemeModeOverride(String raw) {
   final s = raw.trim().toLowerCase();
   if (s.isEmpty) return ThemeMode.system;
@@ -39,7 +52,11 @@ void main() {
       RequestConfiguration(testDeviceIds: [testDeviceId]),
     );
   }
-  MobileAds.instance.initialize();
+  // Skip AdMob init entirely if ads are forced off.
+  final forcedAdsRemoved = _parseOverrideBool(_kAdsRemovedOverrideRaw);
+  if (forcedAdsRemoved != true) {
+    MobileAds.instance.initialize();
+  }
   runApp(const GolfTempoApp());
 }
 
