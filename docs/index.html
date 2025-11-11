@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SwingGroove Golf</title>
+  <meta name="description" content="SwingGroove Golf – improve your golf tempo with precise audio cues." />
+  <style>
+    :root {
+      --brand: #2e7d32;
+      --text: #14222a;
+      --muted: #5b6b74;
+      --bg: #f6faf7;
+      --ring: rgba(46,125,50,0.25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #fff;
+    }
+    header {
+      background: var(--bg);
+      padding: 56px 16px 40px;
+      text-align: center;
+      border-bottom: 1px solid #e6eef0;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    p.lead {
+      margin: 0 auto;
+      max-width: 720px;
+      color: var(--muted);
+    }
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 28px 16px 40px;
+    }
+    .btns {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      justify-content: center;
+      margin-top: 18px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 10px 16px;
+      border: 1px solid var(--brand);
+      color: var(--brand);
+      border-radius: 999px;
+      text-decoration: none;
+      transition: background .15s, color .15s, box-shadow .15s;
+    }
+    .btn:hover { background: #f0faf1; box-shadow: 0 0 0 4px var(--ring); }
+    footer {
+      text-align: center;
+      padding: 24px 16px 32px;
+      color: var(--muted);
+      border-top: 1px solid #e6eef0;
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+</head>
+<body>
+  <header>
+    <h1>SwingGroove Golf</h1>
+    <p class="lead">Improve your golf tempo with precise audio cues for full swing and short game.</p>
+    <div class="btns">
+      <a class="btn" href="https://github.com/rgcase/golf_tempo_app">GitHub</a>
+      <a class="btn" href="https://apps.apple.com/app/idYOUR_IOS_APP_ID">App Store</a>
+      <a class="btn" href="https://play.google.com/store/apps/details?id=dev.golfapp.swinggroove">Google Play</a>
+      <a class="btn" href="https://github.com/rgcase/golf_tempo_app/blob/main/PRIVACY.md">Privacy Policy</a>
+    </div>
+  </header>
+  <main>
+    <h2>About</h2>
+    <p>
+      SwingGroove helps you internalize consistent tempo using simple, reliable audio patterns.
+      Pick your ratio, select a preset, and practice with immediate feedback.
+    </p>
+  </main>
+  <footer>
+    &copy; 2025 Ryan Case
+  </footer>
+</body>
+</html>
+
+
