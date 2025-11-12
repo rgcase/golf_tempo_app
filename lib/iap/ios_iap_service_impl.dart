@@ -3,15 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:golf_tempo_app/env/env.dart';
 
 import 'iap_service.dart';
 
-// Build-time override for the ads-removed state. When provided via
-// --dart-define=ADS_REMOVED_OVERRIDE=true|false this value will be respected
-// unconditionally by the IAP service adsRemoved getter.
-const String _kAdsRemovedOverrideRaw = String.fromEnvironment(
-  'ADS_REMOVED_OVERRIDE',
-);
+// Build-time override for the ads-removed state.
 
 bool? _parseOverrideBool(String raw) {
   final s = raw.trim().toLowerCase();
@@ -22,8 +18,8 @@ bool? _parseOverrideBool(String raw) {
 }
 
 bool? _forcedAdsRemoved() {
-  if (_kAdsRemovedOverrideRaw.isEmpty) return null;
-  return _parseOverrideBool(_kAdsRemovedOverrideRaw);
+  if (Env.adsRemovedOverrideRaw.isEmpty) return null;
+  return _parseOverrideBool(Env.adsRemovedOverrideRaw);
 }
 
 class IosIapServiceImpl implements IapService {

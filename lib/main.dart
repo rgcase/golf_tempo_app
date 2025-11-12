@@ -2,20 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:golf_tempo_app/env/env.dart';
 import 'ui/home_screen.dart';
 import 'consent/consent_manager.dart';
-
-// Compile-time switch to enable a clean UI for screenshots on simulators/devices.
-// Use: flutter run --dart-define=SCREENSHOT_MODE=true
-const bool _kScreenshotMode = bool.fromEnvironment(
-  'SCREENSHOT_MODE',
-  defaultValue: false,
-);
-
-// Optional compile-time override to force ads removed in all code paths.
-const String _kAdsRemovedOverrideRaw = String.fromEnvironment(
-  'ADS_REMOVED_OVERRIDE',
-);
 
 bool? _parseOverrideBool(String raw) {
   final s = raw.trim().toLowerCase();
@@ -38,7 +27,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   // Hide iOS status bar when taking clean screenshots.
-  if (_kScreenshotMode) {
+  if (Env.screenshotMode) {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
   }
   // Request UMP consent (best-effort) before initializing ads.
@@ -46,14 +35,14 @@ void main() {
   // Fire and forget; do not block app startup excessively.
   consent.requestConsentIfNeeded();
   // Optionally register a test device ID when provided via --dart-define.
-  const testDeviceId = String.fromEnvironment('ADMOB_TEST_DEVICE_ID');
+  const testDeviceId = Env.admobTestDeviceId;
   if (testDeviceId.isNotEmpty) {
     MobileAds.instance.updateRequestConfiguration(
       RequestConfiguration(testDeviceIds: [testDeviceId]),
     );
   }
   // Skip AdMob init entirely if ads are forced off.
-  final forcedAdsRemoved = _parseOverrideBool(_kAdsRemovedOverrideRaw);
+  final forcedAdsRemoved = _parseOverrideBool(Env.adsRemovedOverrideRaw);
   if (forcedAdsRemoved != true) {
     MobileAds.instance.initialize();
   }
@@ -72,7 +61,7 @@ class GolfTempoApp extends StatelessWidget {
       seedColor: const Color(0xFF2E7D32),
       brightness: Brightness.dark,
     );
-    const themeOverrideRaw = String.fromEnvironment('THEME_MODE_OVERRIDE');
+    const themeOverrideRaw = Env.themeModeOverrideRaw;
     final mode = _parseThemeModeOverride(themeOverrideRaw);
     if (kDebugMode && themeOverrideRaw.isNotEmpty) {
       debugPrint(
@@ -85,7 +74,7 @@ class GolfTempoApp extends StatelessWidget {
       darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
       themeMode: mode,
       // Hide the top-right "DEBUG" banner when screenshot mode is enabled.
-      debugShowCheckedModeBanner: kDebugMode && !_kScreenshotMode,
+      debugShowCheckedModeBanner: kDebugMode && !Env.screenshotMode,
       home: const HomeScreen(),
     );
   }

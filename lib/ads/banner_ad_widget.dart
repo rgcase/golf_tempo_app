@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'dart:io' show Platform;
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:golf_tempo_app/env/env.dart';
 
 class BannerAdWidget extends StatefulWidget {
   final String adUnitId;
@@ -16,20 +17,11 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   bool _loaded = false;
   String _diag = '';
   bool _scheduled = false;
-  static const bool _showDiag = bool.fromEnvironment(
-    'ADS_DIAG',
-    defaultValue: false,
-  );
-  static const bool _forceNpa = bool.fromEnvironment(
-    'FORCE_NPA',
-    defaultValue: false,
-  );
+  static const bool _showDiag = Env.adsDiag;
+  static const bool _forceNpa = Env.forceNpa;
   // Allows disabling banners during development on environments that have platform
   // view issues (e.g., some ChromeOS builds).
-  static const bool _disableBanners = bool.fromEnvironment(
-    'ADS_DISABLE_BANNERS',
-    defaultValue: false,
-  );
+  static const bool _disableBanners = Env.adsDisableBanners;
 
   @override
   void initState() {
@@ -136,13 +128,17 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
       if (!Platform.isAndroid) return false;
       final info = await DeviceInfoPlugin().androidInfo;
       final features = info.systemFeatures;
-      final bool hasArcFeature = features.any((f) =>
-          f.contains('org.chromium.arc') || f.contains('android.hardware.type.pc'));
+      final bool hasArcFeature = features.any(
+        (f) =>
+            f.contains('org.chromium.arc') ||
+            f.contains('android.hardware.type.pc'),
+      );
       final model = info.model.toLowerCase();
       final device = info.device.toLowerCase();
       final product = info.product.toLowerCase();
       final brand = info.brand.toLowerCase();
-      final bool chromeish = model.contains('chromebook') ||
+      final bool chromeish =
+          model.contains('chromebook') ||
           device.contains('cheets') ||
           product.contains('cheets') ||
           brand.contains('chromium');

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io' show Platform;
 import 'package:duration/duration.dart';
+import 'package:golf_tempo_app/env/env.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -20,17 +21,11 @@ typedef SwingSpeed = ({int backswing, int downswing});
 
 enum SoundSet { tones, woodblock, piano }
 
-// Compile-time switch for hiding debug affordances (e.g., Ad Inspector button)
-// while running in debug/profile on simulator or device.
-const bool kScreenshotMode = bool.fromEnvironment(
-  'SCREENSHOT_MODE',
-  defaultValue: false,
-);
+// Compile-time switch for hiding debug affordances (e.g., Ad Inspector button).
+const bool kScreenshotMode = Env.screenshotMode;
 
 // Optional compile-time override to force ads removed immediately on first frame.
-const String _kAdsRemovedOverrideRawHome = String.fromEnvironment(
-  'ADS_REMOVED_OVERRIDE',
-);
+const String _kAdsRemovedOverrideRawHome = Env.adsRemovedOverrideRaw;
 
 bool? _parseOverrideBool(String raw) {
   final s = raw.trim().toLowerCase();
@@ -114,10 +109,10 @@ class _HomeScreenState extends State<HomeScreen> {
       style: ButtonStyle(
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        padding: MaterialStateProperty.all(
+        padding: WidgetStateProperty.all(
           const EdgeInsets.symmetric(horizontal: 8),
         ),
-        textStyle: MaterialStateProperty.all(const TextStyle(fontSize: 14)),
+        textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 14)),
       ),
       segments: segments,
       selected: <SwingSpeed>{_selectedPreset},
@@ -162,10 +157,10 @@ class _HomeScreenState extends State<HomeScreen> {
       style: ButtonStyle(
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        padding: MaterialStateProperty.all(
+        padding: WidgetStateProperty.all(
           const EdgeInsets.symmetric(horizontal: 8),
         ),
-        textStyle: MaterialStateProperty.all(const TextStyle(fontSize: 14)),
+        textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 14)),
       ),
       segments: segments,
       selected: <Duration>{_gap},
@@ -383,29 +378,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _bannerAdUnitId() {
-    const forceTest = bool.fromEnvironment(
-      'FORCE_TEST_ADS',
-      defaultValue: false,
-    );
+    const forceTest = Env.forceTestAds;
     // Allow using real units in Profile via --dart-define=FORCE_REAL_ADS=true.
-    const forceReal = bool.fromEnvironment(
-      'FORCE_REAL_ADS',
-      defaultValue: false,
-    );
+    const forceReal = Env.forceRealAds;
     if (Platform.isIOS) {
-      const test = 'ca-app-pub-3940256099942544/2934735716';
-      if (forceTest) return test;
-      if (kReleaseMode || forceReal) {
-        const real = String.fromEnvironment('ADMOB_BANNER_IOS');
-        return real.isEmpty ? test : real;
-      }
-      return test;
+      return Env.iosBannerUnitId;
     }
     if (Platform.isAndroid) {
       const test = 'ca-app-pub-3940256099942544/6300978111';
       if (forceTest) return test;
       if (kReleaseMode || forceReal) {
-        const real = String.fromEnvironment('ADMOB_BANNER_ANDROID');
+        const real = Env.androidBannerUnitId;
         return real.isEmpty ? test : real;
       }
       return test;
@@ -504,12 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 6),
                   if (_systemVolume == 0.0) _inlineVolumeWarning(context),
-                  if (!kScreenshotMode &&
-                      (!kReleaseMode ||
-                          const bool.fromEnvironment(
-                            'FORCE_TEST_ADS',
-                            defaultValue: false,
-                          )))
+                  if (!kScreenshotMode && (!kReleaseMode || Env.forceTestAds))
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: OutlinedButton(
