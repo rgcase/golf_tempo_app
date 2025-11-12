@@ -21,25 +21,6 @@ typedef SwingSpeed = ({int backswing, int downswing});
 
 enum SoundSet { tones, woodblock, piano }
 
-// Compile-time switch for hiding debug affordances (e.g., Ad Inspector button).
-const bool kScreenshotMode = Env.screenshotMode;
-
-// Optional compile-time override to force ads removed immediately on first frame.
-const String _kAdsRemovedOverrideRawHome = Env.adsRemovedOverrideRaw;
-
-bool? _parseOverrideBool(String raw) {
-  final s = raw.trim().toLowerCase();
-  if (s.isEmpty) return null;
-  if (s == 'true' || s == '1' || s == 'yes') return true;
-  if (s == 'false' || s == '0' || s == 'no') return false;
-  return null;
-}
-
-bool? _forcedAdsRemovedHome() {
-  if (_kAdsRemovedOverrideRawHome.isEmpty) return null;
-  return _parseOverrideBool(_kAdsRemovedOverrideRawHome);
-}
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -57,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Duration _gap = const Duration(seconds: 2);
   SoundSet _soundSet = SoundSet.tones;
   // Default to forced override if provided so we don't build the ad widget at all.
-  bool _adsRemoved = _forcedAdsRemovedHome() ?? false;
+  bool _adsRemoved = Env.adsRemovedOverride;
   ProductDetails? _removeAdsProduct;
   bool _purchaseInProgress = false;
 
@@ -487,7 +468,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 6),
                   if (_systemVolume == 0.0) _inlineVolumeWarning(context),
-                  if (!kScreenshotMode && (!kReleaseMode || Env.forceTestAds))
+                  if (Env.screenshotMode && (!kReleaseMode || Env.forceTestAds))
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: OutlinedButton(
@@ -581,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         ButtonSegment(
           value: TempoRatio.twoToOne,
-          label: Text('2:1 Short Game/Putting'),
+          label: Text('2:1 Short Game & Putting'),
         ),
       ],
       selected: <TempoRatio>{_ratio},
@@ -606,7 +587,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       segments: const [
         ButtonSegment(value: SoundSet.tones, label: Text('Tones')),
-        ButtonSegment(value: SoundSet.woodblock, label: Text('Woodblock')),
+        ButtonSegment(value: SoundSet.woodblock, label: Text('Wood Block')),
         ButtonSegment(value: SoundSet.piano, label: Text('Piano')),
       ],
       selected: <SoundSet>{_soundSet},
@@ -619,6 +600,12 @@ class _HomeScreenState extends State<HomeScreen> {
           await _engine.queueSoundSetChange(key);
         } else {
           await _engine.setSoundSet(key);
+          final cfg = _configForSelection();
+          await _engine.playPreviewPulse(
+            soundSet: key,
+            backswingUnits: cfg.backswingUnits,
+            downswingUnits: cfg.downswingUnits,
+          );
         }
       },
     );

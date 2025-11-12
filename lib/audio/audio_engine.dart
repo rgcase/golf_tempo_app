@@ -50,6 +50,51 @@ class AudioEngine {
     debugPrint('[AudioEngine] init done');
   }
 
+  /// Plays a short one-shot preview pulse for the provided sound set and tempo.
+  /// This is intended to provide an audible sample when the user switches sound
+  /// types while playback is stopped.
+  Future<void> playPreviewPulse({
+    required String soundSet,
+    required int backswingUnits,
+    required int downswingUnits,
+    Duration duration = const Duration(milliseconds: 250),
+  }) async {
+    if (_isPlaying) {
+      // Avoid overlapping with active playback.
+      return;
+    }
+    if (!_initialized) {
+      await init();
+    }
+    // Best-effort hardware warm-up to minimize initial click/pop.
+    await _primeHardware();
+
+    final String ratioKey = (backswingUnits ~/ downswingUnits) == 3
+        ? '3to1'
+        : '2to1';
+    final String assetPath =
+        'audio/cycles/$soundSet/${ratioKey}_${backswingUnits}_${downswingUnits}.wav';
+
+    final ap.AudioPlayer previewPlayer = ap.AudioPlayer();
+    try {
+      await previewPlayer.setReleaseMode(ap.ReleaseMode.stop);
+      await previewPlayer.setVolume(_volume.clamp(0.0, 1.0));
+      await previewPlayer.play(ap.AssetSource(assetPath));
+      // Stop shortly after the first onset to simulate a single pulse.
+      await Future.delayed(duration);
+      await previewPlayer.stop();
+    } catch (_) {
+      // Ignore preview errors; it's a non-critical UX enhancement.
+    } finally {
+      try {
+        await previewPlayer.release();
+      } catch (_) {}
+      try {
+        await previewPlayer.dispose();
+      } catch (_) {}
+    }
+  }
+
   Future<void> setTempo({
     required int backswingUnits,
     required int downswingUnits,
@@ -204,7 +249,7 @@ class AudioEngine {
 
     final ratioKey = s.backswing ~/ s.downswing == 3 ? '3to1' : '2to1';
     final primary =
-        'audio/cycles/${_soundSet}/${ratioKey}_${s.backswing}_${s.downswing}.wav';
+        'audio/cycles/$_soundSet/${ratioKey}_${s.backswing}_${s.downswing}.wav';
 
     _currentAssetPath = primary;
     debugPrint('[AudioEngine] using asset $_currentAssetPath');

@@ -42,8 +42,8 @@ void main() {
     );
   }
   // Skip AdMob init entirely if ads are forced off.
-  final forcedAdsRemoved = _parseOverrideBool(Env.adsRemovedOverrideRaw);
-  if (forcedAdsRemoved != true) {
+  final forcedAdsRemoved = Env.adsRemovedOverride;
+  if (forcedAdsRemoved != true || Env.adMobAppId.isNotEmpty) {
     MobileAds.instance.initialize();
   }
   runApp(const GolfTempoApp());

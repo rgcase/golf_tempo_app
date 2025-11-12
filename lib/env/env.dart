@@ -10,8 +10,9 @@ class Env {
     'SCREENSHOT_MODE',
     defaultValue: false,
   );
-  static const String adsRemovedOverrideRaw = String.fromEnvironment(
+  static const bool adsRemovedOverride = bool.fromEnvironment(
     'ADS_REMOVED_OVERRIDE',
+    defaultValue: false,
   );
   static const bool forceTestAds = bool.fromEnvironment(
     'FORCE_TEST_ADS',
